@@ -119,8 +119,14 @@ https://github.com/user-attachments/assets/23d42c24-7128-4bdb-bc1d-98509e69d97e
 
 ### 安装（给朋友分发）
 
-- 推荐发布 `.dmg` 或 `.zip`（Developer ID 签名 + Notarization）。
-- 朋友下载后首次运行按提示授权系统权限即可。
+- 可直接下载 Release：
+  - 最新版本页面：https://github.com/hehehai/voxt/releases/latest
+  - 直接下载（`v1.0.0`）：https://github.com/hehehai/voxt/releases/download/v1.0.0/Voxt-v1.0.0-macOS.zip
+- 安装步骤：
+  1. 下载并解压 `Voxt-v1.0.0-macOS.zip`。
+  2. 将 `Voxt.app` 拖到 `Applications`。
+  3. 首次启动按提示授予所需权限。
+  4. 若被 Gatekeeper 拦截，右键 `Voxt.app` -> `打开`。
 
 ### 本地构建
 
