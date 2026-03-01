@@ -30,3 +30,7 @@ Package.resolved
 /tmp/
 build.log
 build2.log
+
+# Local release/agent workflow folders (keep local only)
+.codex/
+scripts/
