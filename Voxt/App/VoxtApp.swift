@@ -11,19 +11,26 @@ enum TranscriptionEngine: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .dictation: return "Direct Dictation"
+        case .mlxAudio: return "MLX Audio (On-device)"
+        }
+    }
+
     var title: String {
         switch self {
-        case .dictation: return String(localized: "Direct Dictation")
-        case .mlxAudio: return String(localized: "MLX Audio (On-device)")
+        case .dictation: return AppLocalization.localizedString("Direct Dictation")
+        case .mlxAudio: return AppLocalization.localizedString("MLX Audio (On-device)")
         }
     }
 
     var description: String {
         switch self {
         case .dictation:
-            return String(localized: "Uses Apple's built-in speech recognition. Works immediately with no setup.")
+            return AppLocalization.localizedString("Uses Apple's built-in speech recognition. Works immediately with no setup.")
         case .mlxAudio:
-            return String(localized: "Uses MLX Audio speech models running locally. Requires a one-time model download.")
+            return AppLocalization.localizedString("Uses MLX Audio speech models running locally. Requires a one-time model download.")
         }
     }
 }
@@ -35,11 +42,19 @@ enum EnhancementMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .off: return "Off"
+        case .appleIntelligence: return "Apple Intelligence"
+        case .customLLM: return "Custom LLM"
+        }
+    }
+
     var title: String {
         switch self {
-        case .off: return String(localized: "Off")
-        case .appleIntelligence: return String(localized: "Apple Intelligence")
-        case .customLLM: return String(localized: "Custom LLM")
+        case .off: return AppLocalization.localizedString("Off")
+        case .appleIntelligence: return AppLocalization.localizedString("Apple Intelligence")
+        case .customLLM: return AppLocalization.localizedString("Custom LLM")
         }
     }
 }
@@ -50,10 +65,17 @@ enum OverlayPosition: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .bottom: return "Bottom"
+        case .top: return "Top"
+        }
+    }
+
     var title: String {
         switch self {
-        case .bottom: return String(localized: "Bottom")
-        case .top: return String(localized: "Top")
+        case .bottom: return AppLocalization.localizedString("Bottom")
+        case .top: return AppLocalization.localizedString("Top")
         }
     }
 }
@@ -144,6 +166,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var enhancer: TextEnhancer?
     private var settingsWindowController: NSWindowController?
+    private var defaultsObserver: NSObjectProtocol?
+    private var interfaceLanguageObserver: NSObjectProtocol?
 
     private var isSessionActive = false
     private var pendingSessionFinishTask: Task<Void, Never>?
@@ -230,6 +254,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image?.accessibilityDescription = "Voxt"
         }
         buildMenu()
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.buildMenu()
+            }
+        }
+        interfaceLanguageObserver = NotificationCenter.default.addObserver(
+            forName: .voxtInterfaceLanguageDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.buildMenu()
+            }
+        }
 
         setupHotkey()
 
@@ -237,6 +279,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Task { [weak self] in
                 await self?.appUpdateManager.checkForUpdates(source: .automatic)
             }
+        }
+    }
+
+    deinit {
+        if let defaultsObserver {
+            NotificationCenter.default.removeObserver(defaultsObserver)
+        }
+        if let interfaceLanguageObserver {
+            NotificationCenter.default.removeObserver(interfaceLanguageObserver)
         }
     }
 
@@ -252,18 +303,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() {
         let menu = NSMenu()
 
-        let settingsItem = NSMenuItem(title: String(localized: "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: AppLocalization.localizedString("Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        let reportItem = NSMenuItem(title: AppLocalization.localizedString("Report"), action: #selector(openReportSettings), keyEquivalent: "")
+        reportItem.target = self
+        menu.addItem(reportItem)
         let checkUpdatesItem = NSMenuItem(
-            title: String(localized: "Check for Updates…"),
+            title: AppLocalization.localizedString("Check for Updates…"),
             action: #selector(checkForUpdates),
             keyEquivalent: ""
         )
         checkUpdatesItem.target = self
         menu.addItem(checkUpdatesItem)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: String(localized: "Quit Voxt"), action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: AppLocalization.localizedString("Quit Voxt"), action: #selector(quit), keyEquivalent: "q"))
         statusItem?.menu = menu
     }
 
@@ -274,7 +328,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
+        openSettingsWindow(selectTab: nil)
+    }
+
+    @objc private func openReportSettings() {
+        openSettingsWindow(selectTab: .report)
+    }
+
+    private func openSettingsWindow(selectTab: SettingsTab?) {
         if let window = settingsWindowController?.window {
+            if let selectTab {
+                NotificationCenter.default.post(
+                    name: .voxtSettingsSelectTab,
+                    object: nil,
+                    userInfo: ["tab": selectTab.rawValue]
+                )
+            }
             centerAndBringWindowToFront(window)
             return
         }
@@ -283,7 +352,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             mlxModelManager: mlxModelManager,
             customLLMManager: customLLMManager,
             historyStore: historyStore,
-            appUpdateManager: appUpdateManager
+            appUpdateManager: appUpdateManager,
+            initialTab: selectTab ?? .general
         )
             .frame(width: 760, height: 560)
         let hostingController = NSHostingController(rootView: contentView)

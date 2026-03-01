@@ -1,23 +1,44 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let voxtSettingsSelectTab = Notification.Name("voxt.settings.selectTab")
+    static let voxtInterfaceLanguageDidChange = Notification.Name("voxt.interfaceLanguage.didChange")
+}
+
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general
-    case permissions
-    case history
+    case report
     case model
+    case history
+    case permissions
     case hotkey
     case about
 
     var id: String { rawValue }
 
-    var title: String {
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .general: return String(localized: "General")
-        case .permissions: return String(localized: "Permissions")
-        case .history: return String(localized: "History")
-        case .model: return String(localized: "Model")
-        case .hotkey: return String(localized: "Hotkey")
-        case .about: return String(localized: "About")
+        case .general: return "General"
+        case .permissions: return "Permissions"
+        case .history: return "History"
+        case .report: return "Report"
+        case .model: return "Model"
+        case .hotkey: return "Hotkey"
+        case .about: return "About"
+        }
+    }
+
+    var title: String { AppLocalization.localizedString(rawTitleKey) }
+
+    private var rawTitleKey: String {
+        switch self {
+        case .general: return "General"
+        case .permissions: return "Permissions"
+        case .history: return "History"
+        case .report: return "Report"
+        case .model: return "Model"
+        case .hotkey: return "Hotkey"
+        case .about: return "About"
         }
     }
 
@@ -26,6 +47,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "slider.horizontal.3"
         case .permissions: return "lock.shield"
         case .history: return "clock.arrow.circlepath"
+        case .report: return "chart.bar"
         case .model: return "waveform"
         case .hotkey: return "keyboard"
         case .about: return "info.circle"
@@ -53,12 +75,23 @@ enum AppInterfaceLanguage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .system: return String(localized: "System Default")
-        case .english: return String(localized: "English")
-        case .chineseSimplified: return String(localized: "Chinese (Simplified)")
-        case .japanese: return String(localized: "Japanese")
+        case .system: return "System Default"
+        case .english: return "English"
+        case .chineseSimplified: return "Chinese (Simplified)"
+        case .japanese: return "Japanese"
+        }
+    }
+
+    var title: String { AppLocalization.localizedString(rawTitleKey) }
+
+    private var rawTitleKey: String {
+        switch self {
+        case .system: return "System Default"
+        case .english: return "English"
+        case .chineseSimplified: return "Chinese (Simplified)"
+        case .japanese: return "Japanese"
         }
     }
 
@@ -107,15 +140,29 @@ enum TranslationTargetLanguage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .english: return String(localized: "English")
-        case .chineseSimplified: return String(localized: "Chinese (Simplified)")
-        case .japanese: return String(localized: "Japanese")
-        case .korean: return String(localized: "Korean")
-        case .spanish: return String(localized: "Spanish")
-        case .french: return String(localized: "French")
-        case .german: return String(localized: "German")
+        case .english: return "English"
+        case .chineseSimplified: return "Chinese (Simplified)"
+        case .japanese: return "Japanese"
+        case .korean: return "Korean"
+        case .spanish: return "Spanish"
+        case .french: return "French"
+        case .german: return "German"
+        }
+    }
+
+    var title: String { AppLocalization.localizedString(rawTitleKey) }
+
+    private var rawTitleKey: String {
+        switch self {
+        case .english: return "English"
+        case .chineseSimplified: return "Chinese (Simplified)"
+        case .japanese: return "Japanese"
+        case .korean: return "Korean"
+        case .spanish: return "Spanish"
+        case .french: return "French"
+        case .german: return "German"
         }
     }
 
@@ -140,12 +187,23 @@ enum InteractionSoundPreset: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .soft: return String(localized: "Soft (Pop/Tink)")
-        case .glass: return String(localized: "Ping")
-        case .funk: return String(localized: "Morse")
-        case .submarine: return String(localized: "Submarine")
+        case .soft: return "Soft (Pop/Tink)"
+        case .glass: return "Ping"
+        case .funk: return "Morse"
+        case .submarine: return "Submarine"
+        }
+    }
+
+    var title: String { AppLocalization.localizedString(rawTitleKey) }
+
+    private var rawTitleKey: String {
+        switch self {
+        case .soft: return "Soft (Pop/Tink)"
+        case .glass: return "Ping"
+        case .funk: return "Morse"
+        case .submarine: return "Submarine"
         }
     }
 }

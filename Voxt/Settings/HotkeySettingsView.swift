@@ -30,6 +30,7 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.translationHotkeyKeyCode) private var translationHotkeyKeyCode = Int(HotkeyPreference.defaultTranslationKeyCode)
     @AppStorage(AppPreferenceKey.translationHotkeyModifiers) private var translationHotkeyModifiers = Int(HotkeyPreference.defaultTranslationModifiers.rawValue)
     @AppStorage(AppPreferenceKey.hotkeyTriggerMode) private var hotkeyTriggerMode = HotkeyPreference.defaultTriggerMode.rawValue
+    @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
 
     @State private var recordingField: RecordingField?
 
@@ -201,7 +202,7 @@ struct HotkeySettingsView: View {
                         Spacer()
                         Picker("Trigger", selection: triggerModeBinding) {
                             ForEach(HotkeyPreference.TriggerMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
+                                Text(mode.titleKey).tag(mode)
                             }
                         }
                         .labelsHidden()
@@ -225,6 +226,7 @@ struct HotkeySettingsView: View {
                 .padding(8)
             }
         }
+        .id(interfaceLanguageRaw)
     }
 
     private func hotkeyConflictMessage(for hotkey: HotkeyPreference.Hotkey) -> String? {

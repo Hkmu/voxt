@@ -52,7 +52,7 @@ struct GeneralSettingsView: View {
                         Spacer()
                         Picker("Sound Preset", selection: $interactionSoundPresetRaw) {
                             ForEach(InteractionSoundPreset.allCases) { preset in
-                                Text(preset.title).tag(preset.rawValue)
+                                Text(preset.titleKey).tag(preset.rawValue)
                             }
                         }
                         .pickerStyle(.menu)
@@ -81,7 +81,7 @@ struct GeneralSettingsView: View {
                         Spacer()
                         Picker("Position", selection: $overlayPositionRaw) {
                             ForEach(OverlayPosition.allCases) { position in
-                                Text(position.title).tag(position.rawValue)
+                                Text(position.titleKey).tag(position.rawValue)
                             }
                         }
                         .pickerStyle(.menu)
@@ -108,7 +108,7 @@ struct GeneralSettingsView: View {
                         Spacer()
                         Picker("Language", selection: $interfaceLanguageRaw) {
                             ForEach(AppInterfaceLanguage.allCases) { language in
-                                Text(language.title).tag(language.rawValue)
+                                Text(language.titleKey).tag(language.rawValue)
                             }
                         }
                         .pickerStyle(.menu)
@@ -135,7 +135,7 @@ struct GeneralSettingsView: View {
                         Spacer()
                         Picker("Target language", selection: $translationTargetLanguageRaw) {
                             ForEach(TranslationTargetLanguage.allCases) { language in
-                                Text(language.title).tag(language.rawValue)
+                                Text(language.titleKey).tag(language.rawValue)
                             }
                         }
                         .pickerStyle(.menu)
@@ -232,6 +232,10 @@ struct GeneralSettingsView: View {
         .onChange(of: showInDock) { _, newValue in
             AppBehaviorController.applyDockVisibility(showInDock: newValue)
         }
+        .onChange(of: interfaceLanguageRaw) { _, _ in
+            NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
+        }
+        .id(interfaceLanguageRaw)
     }
 
     private func refreshInputDevices() {

@@ -36,7 +36,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
         guard !isChecking else { return }
         guard let manifestURL = updateManifestURL else {
             if source == .manual {
-                statusMessage = String(localized: "Update manifest URL is not configured.")
+                statusMessage = AppLocalization.localizedString("Update manifest URL is not configured.")
                 showUpdateSheet = true
             }
             return
@@ -49,7 +49,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
             let manifest = try await fetchManifest(from: manifestURL)
             guard let currentVersion else {
                 if source == .manual {
-                    statusMessage = String(localized: "Unable to read current app version.")
+                    statusMessage = AppLocalization.localizedString("Unable to read current app version.")
                     showUpdateSheet = true
                 }
                 return
@@ -59,7 +59,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
                compareVersions(currentVersion, minimum) == .orderedAscending {
                 hasUpdate = true
                 latestManifest = manifest
-                statusMessage = String(localized: "This version is no longer supported. Please install the latest version.")
+                statusMessage = AppLocalization.localizedString("This version is no longer supported. Please install the latest version.")
                 showUpdateSheet = true
                 return
             }
@@ -70,10 +70,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
                     latestManifest = nil
                     downloadedPackageURL = nil
                     if source == .manual {
-                        statusMessage = String(
-                            format: NSLocalizedString("Version %@ is skipped.", comment: ""),
-                            manifest.version
-                        )
+                        statusMessage = AppLocalization.format("Version %@ is skipped.", manifest.version)
                         showUpdateSheet = true
                     }
                     return
@@ -89,13 +86,13 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
                 latestManifest = nil
                 downloadedPackageURL = nil
                 if source == .manual {
-                    statusMessage = String(localized: "You're Up to Date")
+                    statusMessage = AppLocalization.localizedString("You're Up to Date")
                     showUpdateSheet = true
                 }
             }
         } catch {
             if source == .manual {
-                statusMessage = String(format: NSLocalizedString("Failed to check updates: %@", comment: ""), error.localizedDescription)
+                statusMessage = AppLocalization.format("Failed to check updates: %@", error.localizedDescription)
                 showUpdateSheet = true
             }
         }
@@ -105,7 +102,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
         guard !isDownloading else { return }
         guard let manifest = latestManifest,
               let url = URL(string: manifest.downloadURL) else {
-            statusMessage = String(localized: "Invalid update download URL.")
+            statusMessage = AppLocalization.localizedString("Invalid update download URL.")
             showUpdateSheet = true
             return
         }
@@ -122,7 +119,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
 
     func installAndRestart() {
         guard let packageURL = downloadedPackageURL else {
-            statusMessage = String(localized: "Installer package not downloaded yet.")
+            statusMessage = AppLocalization.localizedString("Installer package not downloaded yet.")
             return
         }
 
@@ -157,7 +154,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
         downloadedPackageURL = nil
         isDownloading = false
         downloadProgress = 0
-        statusMessage = String(format: NSLocalizedString("Skipped version %@.", comment: ""), version)
+        statusMessage = AppLocalization.format("Skipped version %@.", version)
         showUpdateSheet = false
     }
 
@@ -235,12 +232,12 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
                 self.isDownloading = false
                 self.downloadTask = nil
                 self.downloadProgress = 1
-                self.statusMessage = String(localized: "Download complete. Ready to install.")
+                self.statusMessage = AppLocalization.localizedString("Download complete. Ready to install.")
             } catch {
                 self.isDownloading = false
                 self.downloadTask = nil
                 self.downloadProgress = 0
-                self.statusMessage = String(format: NSLocalizedString("Failed to save installer: %@", comment: ""), error.localizedDescription)
+                self.statusMessage = AppLocalization.format("Failed to save installer: %@", error.localizedDescription)
             }
         }
     }
@@ -255,7 +252,7 @@ final class AppUpdateManager: NSObject, ObservableObject, URLSessionDownloadDele
             self.isDownloading = false
             self.downloadTask = nil
             self.downloadProgress = 0
-            self.statusMessage = String(format: NSLocalizedString("Download failed: %@", comment: ""), error.localizedDescription)
+            self.statusMessage = AppLocalization.format("Download failed: %@", error.localizedDescription)
         }
     }
 }

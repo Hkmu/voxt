@@ -89,6 +89,10 @@ final class TranscriptionHistoryStore: ObservableObject {
         loadedCount < allEntries.count
     }
 
+    var allHistoryEntries: [TranscriptionHistoryEntry] {
+        allEntries
+    }
+
     func reload() {
         do {
             let url = try historyFileURL()

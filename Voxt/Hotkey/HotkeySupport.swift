@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import SwiftUI
 
 struct HotkeyPreference {
     enum TriggerMode: String, CaseIterable, Identifiable {
@@ -8,10 +9,17 @@ struct HotkeyPreference {
 
         var id: String { rawValue }
 
+        var titleKey: LocalizedStringKey {
+            switch self {
+            case .longPress: return "Long Press (Release to End)"
+            case .tap: return "Tap (Press to Toggle)"
+            }
+        }
+
         var title: String {
             switch self {
-            case .longPress: return String(localized: "Long Press (Release to End)")
-            case .tap: return String(localized: "Tap (Press to Toggle)")
+            case .longPress: return AppLocalization.localizedString("Long Press (Release to End)")
+            case .tap: return AppLocalization.localizedString("Tap (Press to Toggle)")
             }
         }
     }

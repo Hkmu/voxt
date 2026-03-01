@@ -17,6 +17,7 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.customLLMModelRepo) private var customLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.translationCustomLLMModelRepo) private var translationCustomLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.useHfMirror) private var useHfMirror = false
+    @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
 
     @ObservedObject var mlxModelManager: MLXModelManager
     @ObservedObject var customLLMManager: CustomLLMModelManager
@@ -46,7 +47,7 @@ struct ModelSettingsView: View {
 
                     Picker("Engine", selection: $engineRaw) {
                         ForEach(TranscriptionEngine.allCases) { engine in
-                            Text(engine.title).tag(engine.rawValue)
+                            Text(engine.titleKey).tag(engine.rawValue)
                         }
                     }
                     .pickerStyle(.menu)
@@ -71,9 +72,9 @@ struct ModelSettingsView: View {
                         .font(.headline)
 
                     Picker("Enhancement", selection: $enhancementModeRaw) {
-                        Text(EnhancementMode.off.title).tag(EnhancementMode.off.rawValue)
-                        Text(EnhancementMode.appleIntelligence.title).tag(EnhancementMode.appleIntelligence.rawValue)
-                        Text(EnhancementMode.customLLM.title).tag(EnhancementMode.customLLM.rawValue)
+                        Text(EnhancementMode.off.titleKey).tag(EnhancementMode.off.rawValue)
+                        Text(EnhancementMode.appleIntelligence.titleKey).tag(EnhancementMode.appleIntelligence.rawValue)
+                        Text(EnhancementMode.customLLM.titleKey).tag(EnhancementMode.customLLM.rawValue)
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
@@ -170,6 +171,7 @@ struct ModelSettingsView: View {
         .onChange(of: useHfMirror) { _, _ in
             updateMirrorSetting()
         }
+        .id(interfaceLanguageRaw)
     }
 
     @ViewBuilder
@@ -385,30 +387,27 @@ struct ModelSettingsView: View {
     private func downloadProgressText(completed: Int64, total: Int64) -> String {
         let completedText = Self.byteFormatter.string(fromByteCount: completed)
         if total > 0 {
-            let totalText = Self.byteFormatter.string(fromByteCount: total)
-            let format = NSLocalizedString("Downloaded: %@ / %@", comment: "")
-            return String(format: format, completedText, totalText)
+            return AppLocalization.format(
+                "Downloaded: %@ / %@",
+                completedText,
+                Self.byteFormatter.string(fromByteCount: total)
+            )
         }
-        let format = NSLocalizedString("Downloaded: %@", comment: "")
-        return String(format: format, completedText)
+        return AppLocalization.format("Downloaded: %@", completedText)
     }
 
     private func downloadFileProgressText(currentFile: String?, completedFiles: Int, totalFiles: Int) -> String {
         let filesText: String
         if totalFiles > 0 {
-            let format = NSLocalizedString("%d/%d files", comment: "")
-            filesText = String(format: format, completedFiles, totalFiles)
+            filesText = AppLocalization.format("%d/%d files", completedFiles, totalFiles)
         } else {
-            let format = NSLocalizedString("%d files", comment: "")
-            filesText = String(format: format, completedFiles)
+            filesText = AppLocalization.format("%d files", completedFiles)
         }
         guard let currentFile, !currentFile.isEmpty else {
-            let format = NSLocalizedString("Preparing download... (%@)", comment: "")
-            return String(format: format, filesText)
+            return AppLocalization.format("Preparing download... (%@)", filesText)
         }
         let fileName = (currentFile as NSString).lastPathComponent
-        let format = NSLocalizedString("Downloading: %@ (%@)", comment: "")
-        return String(format: format, fileName, filesText)
+        return AppLocalization.format("Downloading: %@ (%@)", fileName, filesText)
     }
 
     private func useModel(_ repo: String) {
@@ -451,22 +450,19 @@ struct ModelSettingsView: View {
     private func modelStatusText(for repo: String) -> String {
         if isDownloadingModel(repo),
            case .downloading(_, let completed, let total, _, _, _) = mlxModelManager.state {
-            let format = NSLocalizedString("Downloading %@", comment: "")
-            return String(format: format, downloadProgressText(completed: completed, total: total))
+            return AppLocalization.format("Downloading %@", downloadProgressText(completed: completed, total: total))
         }
 
         let installedSize = mlxModelManager.modelSizeOnDisk(repo: repo)
         if mlxModelManager.isModelDownloaded(repo: repo) {
             if installedSize.isEmpty {
-                return String(localized: "Installed")
+                return AppLocalization.localizedString("Installed")
             }
-            let format = NSLocalizedString("Installed • %@", comment: "")
-            return String(format: format, installedSize)
+            return AppLocalization.format("Installed (%@)", installedSize)
         }
 
         let remoteSize = mlxModelManager.remoteSizeText(repo: repo)
-        let format = NSLocalizedString("Not installed • %@", comment: "")
-        return String(format: format, remoteSize)
+        return AppLocalization.format("Not installed (%@)", remoteSize)
     }
 
     private func useCustomLLM(_ repo: String) {
@@ -508,22 +504,19 @@ struct ModelSettingsView: View {
     private func customLLMStatusText(for repo: String) -> String {
         if isDownloadingCustomLLM(repo),
            case .downloading(_, let completed, let total, _, _, _) = customLLMManager.state {
-            let format = NSLocalizedString("Downloading %@", comment: "")
-            return String(format: format, downloadProgressText(completed: completed, total: total))
+            return AppLocalization.format("Downloading %@", downloadProgressText(completed: completed, total: total))
         }
 
         let installedSize = customLLMManager.modelSizeOnDisk(repo: repo)
         if customLLMManager.isModelDownloaded(repo: repo) {
             if installedSize.isEmpty {
-                return String(localized: "Installed")
+                return AppLocalization.localizedString("Installed")
             }
-            let format = NSLocalizedString("Installed • %@", comment: "")
-            return String(format: format, installedSize)
+            return AppLocalization.format("Installed (%@)", installedSize)
         }
 
         let remoteSize = customLLMManager.remoteSizeText(repo: repo)
-        let format = NSLocalizedString("Not installed • %@", comment: "")
-        return String(format: format, remoteSize)
+        return AppLocalization.format("Not installed (%@)", remoteSize)
     }
 
     private func updateMirrorSetting() {

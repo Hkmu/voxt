@@ -9,8 +9,24 @@ struct SettingsView: View {
     @ObservedObject var customLLMManager: CustomLLMModelManager
     @ObservedObject var historyStore: TranscriptionHistoryStore
     @ObservedObject var appUpdateManager: AppUpdateManager
-    @State private var selectedTab: SettingsTab = .general
+    @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
+    @State private var selectedTab: SettingsTab
     @State private var hasMissingPermissions = false
+    @State private var languageRefreshToken = UUID()
+
+    init(
+        mlxModelManager: MLXModelManager,
+        customLLMManager: CustomLLMModelManager,
+        historyStore: TranscriptionHistoryStore,
+        appUpdateManager: AppUpdateManager,
+        initialTab: SettingsTab = .general
+    ) {
+        self.mlxModelManager = mlxModelManager
+        self.customLLMManager = customLLMManager
+        self.historyStore = historyStore
+        self.appUpdateManager = appUpdateManager
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         ZStack {
@@ -33,16 +49,21 @@ struct SettingsView: View {
                     .frame(maxHeight: .infinity, alignment: .top)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(selectedTab.title)
+                    Text(selectedTab.titleKey)
                         .font(.title3.weight(.semibold))
                         .padding(.horizontal, 8)
 
-                    if selectedTab == .history {
-                        HistorySettingsView(historyStore: historyStore)
+                    if selectedTab == .history || selectedTab == .report {
+                        Group {
+                            if selectedTab == .history {
+                                HistorySettingsView(historyStore: historyStore)
+                            } else {
+                                ReportSettingsView(historyStore: historyStore)
+                            }
+                        }
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             .padding(.horizontal, 8)
                             .padding(.top, 2)
-                            .padding(.bottom, 12)
                     } else {
                         ScrollView {
                             Group {
@@ -51,6 +72,8 @@ struct SettingsView: View {
                                     GeneralSettingsView()
                                 case .permissions:
                                     PermissionsSettingsView()
+                                case .report:
+                                    EmptyView()
                                 case .model:
                                     ModelSettingsView(
                                         mlxModelManager: mlxModelManager,
@@ -67,7 +90,6 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                             .padding(.horizontal, 8)
                             .padding(.top, 2)
-                            .padding(.bottom, 12)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
@@ -80,6 +102,8 @@ struct SettingsView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .frame(minWidth: 760, minHeight: 560)
+        .environment(\.locale, interfaceLanguage.locale)
+        .id(languageRefreshToken)
         .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $appUpdateManager.showUpdateSheet) {
             UpdateSheetView(appUpdateManager: appUpdateManager)
@@ -91,6 +115,21 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionBadge()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtSettingsSelectTab)) { notification in
+            guard let rawValue = notification.userInfo?["tab"] as? String,
+                  let targetTab = SettingsTab(rawValue: rawValue)
+            else {
+                return
+            }
+            selectedTab = targetTab
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtInterfaceLanguageDidChange)) { _ in
+            languageRefreshToken = UUID()
+        }
+    }
+
+    private var interfaceLanguage: AppInterfaceLanguage {
+        AppInterfaceLanguage(rawValue: interfaceLanguageRaw) ?? .system
     }
 
     private func refreshPermissionBadge() {
@@ -125,7 +164,7 @@ private struct SettingsSidebar: View {
                         Image(systemName: tab.iconName)
                             .font(.system(size: 13, weight: .semibold))
                             .frame(width: 16)
-                        Text(tab.title)
+                        Text(tab.titleKey)
                             .font(.system(size: 13, weight: .medium))
                         Spacer(minLength: 0)
                     }

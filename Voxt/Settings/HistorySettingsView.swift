@@ -101,6 +101,8 @@ struct HistorySettingsView: View {
 }
 
 private struct HistoryRow: View {
+    @Environment(\.locale) private var locale
+
     let entry: TranscriptionHistoryEntry
     let isCopied: Bool
     let onCopy: () -> Void
@@ -191,12 +193,19 @@ private struct HistoryRow: View {
     }
 
     private var metadataText: String {
-        let dateText = entry.createdAt.formatted(date: .abbreviated, time: .shortened)
+        let dateText = entry.createdAt.formatted(
+            .dateTime
+                .locale(locale)
+                .month(.abbreviated)
+                .day()
+                .hour()
+                .minute()
+        )
         guard let audioDuration = formattedDuration(entry.audioDurationSeconds) else {
             return dateText
         }
         let format = NSLocalizedString("%@ · Audio: %@", comment: "")
-        return String(format: format, dateText, audioDuration)
+        return String(format: format, locale: locale, dateText, audioDuration)
     }
 
     private var historyBadge: some View {
@@ -220,13 +229,16 @@ private struct HistoryRow: View {
     private func formattedDuration(_ seconds: TimeInterval?) -> String? {
         guard let seconds else { return nil }
         if seconds < 1 {
-            return "\(Int(seconds * 1000)) ms"
+            let format = NSLocalizedString("%d ms", comment: "")
+            return String(format: format, locale: locale, Int(seconds * 1000))
         }
         if seconds < 60 {
-            return String(format: "%.1f s", seconds)
+            let format = NSLocalizedString("%.1f s", comment: "")
+            return String(format: format, locale: locale, seconds)
         }
         let minutes = Int(seconds) / 60
         let remain = Int(seconds) % 60
-        return "\(minutes)m \(remain)s"
+        let format = NSLocalizedString("%dm %ds", comment: "")
+        return String(format: format, locale: locale, minutes, remain)
     }
 }
