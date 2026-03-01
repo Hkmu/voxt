@@ -1,6 +1,23 @@
 import SwiftUI
 
 struct AboutSettingsView: View {
+    private var appVersionText: String? {
+        let bundle = Bundle.main
+        let shortVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        if let shortVersion, let buildVersion, !buildVersion.isEmpty {
+            return "\(shortVersion) (\(buildVersion))"
+        }
+        if let shortVersion {
+            return shortVersion
+        }
+        if let buildVersion {
+            return buildVersion
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox {
@@ -11,7 +28,7 @@ struct AboutSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                    if let version = appVersionText {
                         HStack(spacing: 4) {
                             Text("Version")
                             Text(version)

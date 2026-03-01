@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Resolve version
+        id: version
+        run: |
+          RAW="${GITHUB_REF_NAME:-manual}"
+          if [[ "$RAW" == v* ]]; then
+            echo "value=${RAW#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${RAW}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/release/build_release.sh
+          chmod +x scripts/release/publish_manifest.sh
+
+      - name: Build release artifacts
+        env:
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Voxt-${{ steps.version.outputs.value }}.pkg
+          RELEASE_NOTES: See CHANGELOG.md for details.
+        run: |
+          scripts/release/build_release.sh "${{ steps.version.outputs.value }}"
+
+      - name: Publish appcast to repo tree
+        run: |
+          scripts/release/publish_manifest.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxt-release-${{ steps.version.outputs.value }}
+          path: |
+            build/release/artifacts/*.zip
+            build/release/artifacts/*.pkg
+            build/release/artifacts/appcast.json
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            build/release/artifacts/*.zip
+            build/release/artifacts/*.pkg
+            build/release/artifacts/appcast.json
+          body_path: CHANGELOG.md
+

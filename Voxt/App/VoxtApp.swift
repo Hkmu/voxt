@@ -80,6 +80,8 @@ enum AppPreferenceKey {
     static let launchAtLogin = "launchAtLogin"
     static let showInDock = "showInDock"
     static let historyEnabled = "historyEnabled"
+    static let autoCheckForUpdates = "autoCheckForUpdates"
+    static let updateManifestURL = "updateManifestURL"
 
     static let defaultEnhancementPrompt = """
         You are Voxt, a speech-to-text transcription assistant. Your only job is to enhance raw transcription output. Fix punctuation, add missing commas, correct capitalization, and improve formatting. Do not alter the meaning, tone, or substance of the text. Clean up non-sematic tone words，Do not add, remove, or rephrase any content. Do not add commentary or explanations. Return only the cleaned-up text. If there is a mixed language, please pay attention to keep the mixed language semantics.
@@ -102,7 +104,8 @@ struct VoxtApp: App {
             SettingsView(
                 mlxModelManager: appDelegate.mlxModelManager,
                 customLLMManager: appDelegate.customLLMManager,
-                historyStore: appDelegate.historyStore
+                historyStore: appDelegate.historyStore,
+                appUpdateManager: appDelegate.appUpdateManager
             )
                 .frame(width: 760, height: 560)
                 .environment(\.locale, interfaceLanguage.locale)
@@ -128,6 +131,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let mlxModelManager: MLXModelManager
     let customLLMManager: CustomLLMModelManager
     let historyStore = TranscriptionHistoryStore()
+    let appUpdateManager = AppUpdateManager()
     private let interactionSoundPlayer = InteractionSoundPlayer()
 
     private let hotkeyManager = HotkeyManager()
@@ -173,6 +177,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.launchAtLogin: false,
             AppPreferenceKey.showInDock: false,
             AppPreferenceKey.historyEnabled: false,
+            AppPreferenceKey.autoCheckForUpdates: true,
+            AppPreferenceKey.updateManifestURL: "https://raw.githubusercontent.com/hehehai/voxt/main/updates/appcast.json",
         ])
         HotkeyPreference.registerDefaults()
         HotkeyPreference.migrateDefaultsIfNeeded()
@@ -228,6 +234,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             setupHotkey()
         }
+
+        if autoCheckForUpdates {
+            Task { [weak self] in
+                await self?.appUpdateManager.checkForUpdates(source: .automatic)
+            }
+        }
     }
 
     private func migrateLegacyPreferences() {
@@ -245,9 +257,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsItem = NSMenuItem(title: String(localized: "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        let checkUpdatesItem = NSMenuItem(
+            title: String(localized: "Check for Updates…"),
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        checkUpdatesItem.target = self
+        menu.addItem(checkUpdatesItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: String(localized: "Quit Voxt"), action: #selector(quit), keyEquivalent: "q"))
         statusItem?.menu = menu
+    }
+
+    @objc private func checkForUpdates() {
+        Task { [weak self] in
+            await self?.appUpdateManager.checkForUpdates(source: .manual)
+        }
     }
 
     @objc private func openSettings() {
@@ -259,7 +284,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = SettingsView(
             mlxModelManager: mlxModelManager,
             customLLMManager: customLLMManager,
-            historyStore: historyStore
+            historyStore: historyStore,
+            appUpdateManager: appUpdateManager
         )
             .frame(width: 760, height: 560)
         let hostingController = NSHostingController(rootView: contentView)
@@ -817,6 +843,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var historyEnabled: Bool {
         UserDefaults.standard.bool(forKey: AppPreferenceKey.historyEnabled)
+    }
+
+    private var autoCheckForUpdates: Bool {
+        UserDefaults.standard.bool(forKey: AppPreferenceKey.autoCheckForUpdates)
     }
 
     private func appendHistoryIfNeeded(text: String, llmDurationSeconds: TimeInterval?) {

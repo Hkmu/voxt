@@ -11,6 +11,7 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) private var autoCopyWhenNoFocusedInput = false
     @AppStorage(AppPreferenceKey.launchAtLogin) private var launchAtLogin = false
     @AppStorage(AppPreferenceKey.showInDock) private var showInDock = false
+    @AppStorage(AppPreferenceKey.autoCheckForUpdates) private var autoCheckForUpdates = true
 
     @State private var inputDevices: [AudioInputDevice] = []
     @State private var launchAtLoginError: String?
@@ -176,6 +177,11 @@ struct GeneralSettingsView: View {
 
                     Toggle("Show in Dock", isOn: $showInDock)
                     Text("Show Voxt in your Mac Dock for quick access.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Toggle("Automatically check for updates", isOn: $autoCheckForUpdates)
+                    Text("Check update manifest at launch and notify when a newer version is available.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
