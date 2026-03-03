@@ -101,6 +101,9 @@ enum AppPreferenceKey {
     static let interfaceLanguage = "interfaceLanguage"
     static let translationTargetLanguage = "translationTargetLanguage"
     static let autoCopyWhenNoFocusedInput = "autoCopyWhenNoFocusedInput"
+    static let appEnhancementEnabled = "appEnhancementEnabled"
+    static let appBranchGroups = "appBranchGroups"
+    static let appBranchURLs = "appBranchURLs"
     static let launchAtLogin = "launchAtLogin"
     static let showInDock = "showInDock"
     static let historyEnabled = "historyEnabled"
@@ -144,6 +147,39 @@ struct VoxtApp: App {
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private struct StoredBranchURLItem: Codable {
+        let id: UUID
+        let pattern: String
+    }
+
+    private struct StoredAppBranchGroup: Codable {
+        let id: UUID
+        let name: String
+        let prompt: String
+        let appBundleIDs: [String]
+        let urlPatternIDs: [UUID]
+        let isExpanded: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case name
+            case prompt
+            case appBundleIDs
+            case urlPatternIDs
+            case isExpanded
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            name = try container.decode(String.self, forKey: .name)
+            prompt = try container.decode(String.self, forKey: .prompt)
+            appBundleIDs = try container.decodeIfPresent([String].self, forKey: .appBundleIDs) ?? []
+            urlPatternIDs = try container.decodeIfPresent([UUID].self, forKey: .urlPatternIDs) ?? []
+            isExpanded = try container.decodeIfPresent(Bool.self, forKey: .isExpanded) ?? true
+        }
+    }
+
     private enum SessionOutputMode {
         case transcription
         case translation
@@ -200,6 +236,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.interfaceLanguage: AppInterfaceLanguage.system.rawValue,
             AppPreferenceKey.translationTargetLanguage: TranslationTargetLanguage.english.rawValue,
             AppPreferenceKey.autoCopyWhenNoFocusedInput: false,
+            AppPreferenceKey.appEnhancementEnabled: false,
             AppPreferenceKey.translationSystemPrompt: AppPreferenceKey.defaultTranslationPrompt,
             AppPreferenceKey.launchAtLogin: false,
             AppPreferenceKey.showInDock: false,
@@ -227,8 +264,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return EnhancementMode(rawValue: raw ?? "") ?? .off
         }
         set {
+            let previous = enhancementMode
             UserDefaults.standard.set(newValue.rawValue, forKey: AppPreferenceKey.enhancementMode)
+            if previous != newValue {
+                VoxtLog.info("Enhancement mode changed: \(previous.rawValue) -> \(newValue.rawValue)")
+                if newValue == .off {
+                    VoxtLog.info("Custom LLM downloaded models are preserved when enhancement is off.")
+                }
+            }
         }
+    }
+
+    private var appEnhancementEnabled: Bool {
+        UserDefaults.standard.bool(forKey: AppPreferenceKey.appEnhancementEnabled)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -366,7 +414,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.toolbar = nil
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.level = .normal
@@ -571,6 +619,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func processTranscription(_ rawText: String) {
+        stopRecordingFallbackTask?.cancel()
+        stopRecordingFallbackTask = nil
+
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             VoxtLog.info("Transcription result is empty; finishing session.")
@@ -579,6 +630,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         VoxtLog.info("Transcription result received. characters=\(text.count), output=\(sessionOutputMode == .translation ? "translation" : "transcription")")
+        VoxtLog.info("Enhancement mode=\(enhancementMode.rawValue), appEnhancementEnabled=\(appEnhancementEnabled)")
 
         if sessionOutputMode == .translation {
             processTranslatedTranscription(text)
@@ -607,8 +659,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 do {
                     if #available(macOS 26.0, *) {
-                        let prompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)
-                            ?? AppPreferenceKey.defaultEnhancementPrompt
+                        let prompt = self.resolvedEnhancementPrompt()
                         let llmStartedAt = Date()
                         let enhanced = try await enhancer.enhance(text, systemPrompt: prompt)
                         let llmDuration = Date().timeIntervalSince(llmStartedAt)
@@ -642,8 +693,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.finishSession()
                 }
                 let llmStartedAt = Date()
-                let prompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)
-                    ?? AppPreferenceKey.defaultEnhancementPrompt
+                let prompt = self.resolvedEnhancementPrompt()
                 do {
                     let enhanced = try await self.customLLMManager.enhance(text, systemPrompt: prompt)
                     let llmDuration = Date().timeIntervalSince(llmStartedAt)
@@ -684,15 +734,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .appleIntelligence:
             guard let enhancer else { return text }
             if #available(macOS 26.0, *) {
-                let prompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)
-                    ?? AppPreferenceKey.defaultEnhancementPrompt
+                let prompt = resolvedEnhancementPrompt()
                 return try await enhancer.enhance(text, systemPrompt: prompt)
             }
             return text
         case .customLLM:
             guard customLLMManager.isModelDownloaded(repo: customLLMManager.currentModelRepo) else { return text }
-            let prompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)
-                ?? AppPreferenceKey.defaultEnhancementPrompt
+            let prompt = resolvedEnhancementPrompt()
             return try await customLLMManager.enhance(text, systemPrompt: prompt)
         }
     }
@@ -1141,8 +1189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 case .appleIntelligence:
                     guard let enhancer else { return }
                     if #available(macOS 26.0, *) {
-                        let prompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)
-                            ?? AppPreferenceKey.defaultEnhancementPrompt
+                        let prompt = self.resolvedEnhancementPrompt()
                         let enhanced = try await enhancer.enhance(input, systemPrompt: prompt)
                         guard !Task.isCancelled else { return }
                         guard self.isSessionActive else { return }
@@ -1158,8 +1205,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     guard self.customLLMManager.isModelDownloaded(repo: self.customLLMManager.currentModelRepo) else {
                         return
                     }
-                    let prompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)
-                        ?? AppPreferenceKey.defaultEnhancementPrompt
+                    let prompt = self.resolvedEnhancementPrompt()
                     let enhanced = try await self.customLLMManager.enhance(input, systemPrompt: prompt)
                     guard !Task.isCancelled else { return }
                     guard self.isSessionActive else { return }
@@ -1195,5 +1241,203 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")!)
         }
         NSApp.terminate(nil)
+    }
+
+    private func resolvedEnhancementPrompt() -> String {
+        let globalPrompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackPrompt = (globalPrompt?.isEmpty == false) ? globalPrompt! : AppPreferenceKey.defaultEnhancementPrompt
+
+        guard appEnhancementEnabled else {
+            VoxtLog.info("Enhancement prompt source: global/default (app branch disabled)")
+            return fallbackPrompt
+        }
+
+        let groups = loadAppBranchGroups()
+        guard !groups.isEmpty else {
+            VoxtLog.info("Enhancement prompt source: global/default (no app branch groups)")
+            return fallbackPrompt
+        }
+
+        let urlsByID = loadAppBranchURLsByID()
+        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+
+        if isBrowserBundleID(frontmostBundleID) {
+            let activeURL = activeBrowserTabURL(frontmostBundleID: frontmostBundleID)
+            let normalizedActiveURL = normalizedURLForMatching(activeURL)
+
+            guard let normalizedActiveURL else {
+                VoxtLog.info("Enhancement prompt source: global/default (browser url unavailable), bundleID=\(frontmostBundleID ?? "nil")")
+                return fallbackPrompt
+            }
+
+            for group in groups {
+                for urlID in group.urlPatternIDs {
+                    guard let pattern = urlsByID[urlID], wildcardMatches(pattern: pattern, candidate: normalizedActiveURL) else {
+                        continue
+                    }
+                    let prompt = group.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !prompt.isEmpty {
+                        VoxtLog.info("Enhancement prompt source: group(url) group=\(group.name), pattern=\(pattern), url=\(normalizedActiveURL)")
+                        return prompt
+                    }
+                }
+            }
+
+            VoxtLog.info("Enhancement prompt source: global/default (browser url no group match), bundleID=\(frontmostBundleID ?? "nil"), url=\(normalizedActiveURL)")
+            return fallbackPrompt
+        }
+
+        let activeURL = activeBrowserTabURL(frontmostBundleID: frontmostBundleID)
+        let normalizedActiveURL = normalizedURLForMatching(activeURL)
+
+        if let normalizedActiveURL {
+            for group in groups {
+                for urlID in group.urlPatternIDs {
+                    guard let pattern = urlsByID[urlID], wildcardMatches(pattern: pattern, candidate: normalizedActiveURL) else {
+                        continue
+                    }
+                    let prompt = group.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !prompt.isEmpty {
+                        VoxtLog.info("Enhancement prompt source: group(url) group=\(group.name), pattern=\(pattern), url=\(normalizedActiveURL)")
+                        return prompt
+                    }
+                }
+            }
+        }
+
+        if let frontmostBundleID {
+            for group in groups where group.appBundleIDs.contains(frontmostBundleID) {
+                let prompt = group.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !prompt.isEmpty {
+                    VoxtLog.info("Enhancement prompt source: group(app) group=\(group.name), bundleID=\(frontmostBundleID)")
+                    return prompt
+                }
+            }
+        }
+
+        VoxtLog.info("Enhancement prompt source: global/default (no group match), bundleID=\(frontmostBundleID ?? "nil"), url=\(normalizedActiveURL ?? "nil")")
+        return fallbackPrompt
+    }
+
+    private func loadAppBranchGroups() -> [StoredAppBranchGroup] {
+        guard let data = UserDefaults.standard.data(forKey: AppPreferenceKey.appBranchGroups) else { return [] }
+        return (try? JSONDecoder().decode([StoredAppBranchGroup].self, from: data)) ?? []
+    }
+
+    private func loadAppBranchURLsByID() -> [UUID: String] {
+        guard let data = UserDefaults.standard.data(forKey: AppPreferenceKey.appBranchURLs),
+              let items = try? JSONDecoder().decode([StoredBranchURLItem].self, from: data)
+        else {
+            return [:]
+        }
+
+        var result: [UUID: String] = [:]
+        for item in items {
+            result[item.id] = item.pattern.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+        return result
+    }
+
+    private func isBrowserBundleID(_ bundleID: String?) -> Bool {
+        guard let bundleID else { return false }
+        switch bundleID {
+        case "com.apple.Safari",
+             "com.google.Chrome",
+             "com.microsoft.edgemac",
+             "com.brave.Browser",
+             "company.thebrowser.Browser":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func activeBrowserTabURL(frontmostBundleID: String?) -> String? {
+        guard let frontmostBundleID else { return nil }
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: frontmostBundleID)
+            .contains(where: { !$0.isTerminated }) else {
+            VoxtLog.info("Browser process not running while resolving active tab URL. bundleID=\(frontmostBundleID)")
+            return nil
+        }
+        switch frontmostBundleID {
+        case "com.apple.Safari":
+            return runAppleScript("tell application \"Safari\" to return URL of current tab of front window")
+        case "com.google.Chrome":
+            return runAppleScript("tell application \"Google Chrome\" to return URL of active tab of front window")
+        case "com.microsoft.edgemac":
+            return runAppleScript("tell application \"Microsoft Edge\" to return URL of active tab of front window")
+        case "com.brave.Browser":
+            return runAppleScript("tell application \"Brave Browser\" to return URL of active tab of front window")
+        case "company.thebrowser.Browser":
+            return runAppleScriptCandidates([
+                "tell application id \"company.thebrowser.Browser\" to return (URL of active tab of front window) as text",
+                "tell application id \"company.thebrowser.Browser\" to return (URL of active tab of window 1) as text"
+            ])
+        default:
+            return nil
+        }
+    }
+
+    private func runAppleScriptCandidates(_ sources: [String]) -> String? {
+        var lastError: NSDictionary?
+        for source in sources {
+            var executionError: NSDictionary?
+            if let output = runAppleScript(source, error: &executionError, logFailure: false),
+               !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return output
+            }
+            if let executionError {
+                lastError = executionError
+            }
+        }
+        if let lastError {
+            VoxtLog.info("Browser active-tab URL read failed: \(lastError)")
+        }
+        return nil
+    }
+
+    private func runAppleScript(
+        _ source: String,
+        error: inout NSDictionary?,
+        logFailure: Bool = true
+    ) -> String? {
+        guard let script = NSAppleScript(source: source) else { return nil }
+        guard let output = script.executeAndReturnError(&error).stringValue else {
+            if logFailure, let error {
+                VoxtLog.info("Browser active-tab URL read failed: \(error)")
+            }
+            return nil
+        }
+        return output
+    }
+
+    private func runAppleScript(_ source: String) -> String? {
+        var error: NSDictionary?
+        return runAppleScript(source, error: &error)
+    }
+
+    private func normalizedURLForMatching(_ rawURL: String?) -> String? {
+        guard let rawURL else { return nil }
+        let trimmed = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let withScheme: String = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        if let components = URLComponents(string: withScheme), let host = components.host?.lowercased() {
+            let path = components.path.isEmpty ? "/" : components.path.lowercased()
+            return "\(host)\(path)"
+        }
+        return trimmed.lowercased()
+    }
+
+    private func wildcardMatches(pattern: String, candidate: String) -> Bool {
+        let normalizedPattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedPattern.isEmpty else { return false }
+
+        let escaped = NSRegularExpression.escapedPattern(for: normalizedPattern)
+        let regexPattern = "^" + escaped.replacingOccurrences(of: "\\*", with: ".*") + "$"
+        guard let regex = try? NSRegularExpression(pattern: regexPattern, options: []) else { return false }
+        let range = NSRange(location: 0, length: (candidate as NSString).length)
+        return regex.firstMatch(in: candidate.lowercased(), options: [], range: range) != nil
     }
 }

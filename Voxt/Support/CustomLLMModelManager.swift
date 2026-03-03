@@ -300,6 +300,8 @@ class CustomLLMModelManager: ObservableObject {
 
                 for (index, entry) in entries.enumerated() {
                     let progress = Progress(totalUnitCount: max(entry.size ?? 1, 1))
+                    let fileBaseCompleted = completedBytes
+                    let expectedFileBytes = max(entry.size ?? 1, 1)
                     setDownloadingState(
                         progress: min(1, Double(completedBytes) / Double(totalBytes)),
                         completed: min(completedBytes, totalBytes),
@@ -308,6 +310,32 @@ class CustomLLMModelManager: ObservableObject {
                         completedFiles: index,
                         totalFiles: totalFiles
                     )
+
+                    let progressUpdateTask = Task { [weak self] in
+                        while !Task.isCancelled {
+                            await MainActor.run {
+                                guard let self else { return }
+                                let reported = max(progress.completedUnitCount, 0)
+                                let effectiveCurrentFileCompleted = min(
+                                    max(reported, 0),
+                                    max(expectedFileBytes, max(progress.totalUnitCount, 1))
+                                )
+                                let aggregateCompleted = min(
+                                    fileBaseCompleted + effectiveCurrentFileCompleted,
+                                    totalBytes
+                                )
+                                self.setDownloadingState(
+                                    progress: min(1, Double(aggregateCompleted) / Double(totalBytes)),
+                                    completed: aggregateCompleted,
+                                    total: totalBytes,
+                                    currentFile: entry.path,
+                                    completedFiles: index,
+                                    totalFiles: totalFiles
+                                )
+                            }
+                            try? await Task.sleep(for: .milliseconds(120))
+                        }
+                    }
 
                     _ = try await client.downloadFile(
                         at: entry.path,
@@ -319,6 +347,7 @@ class CustomLLMModelManager: ObservableObject {
                         transport: .lfs,
                         localFilesOnly: false
                     )
+                    progressUpdateTask.cancel()
 
                     completedBytes += max(entry.size ?? progress.completedUnitCount, 0)
                     setDownloadingState(

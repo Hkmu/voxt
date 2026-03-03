@@ -1,0 +1,1030 @@
+import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
+
+struct AppEnhancementSettingsView: View {
+    @State private var apps: [BranchApp] = []
+    @State private var urlItems: [BranchURLItem] = []
+    @State private var groups: [AppBranchGroup] = []
+
+    @State private var sourceTab: SourceTab = .apps
+    @State private var draggingAppID: String?
+    @State private var hoveredCardID: String?
+
+    @State private var modal: AppBranchModal?
+    @State private var groupNameDraft = ""
+    @State private var groupPromptDraft = ""
+    @State private var urlDraft = ""
+    @State private var modalErrorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sourceListCard
+            groupListCard
+        }
+        .onAppear {
+            loadPersistedGroups()
+            loadPersistedURLs()
+            refreshApps()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.didActivateApplicationNotification)) { _ in
+            refreshApps()
+        }
+        .onChange(of: groups) { _, _ in
+            saveGroups()
+        }
+        .onChange(of: urlItems) { _, _ in
+            saveURLs()
+        }
+        .sheet(item: $modal) { currentModal in
+            modalView(for: currentModal)
+        }
+    }
+
+    private var sourceListCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Picker("Source", selection: $sourceTab) {
+                        ForEach(SourceTab.allCases) { tab in
+                            Text(tab.title).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+
+                    Spacer()
+
+                    if sourceTab == .urls {
+                        Button("Add") {
+                            urlDraft = ""
+                            modalErrorMessage = nil
+                            modal = .addURLs
+                        }
+                    }
+                }
+
+                switch sourceTab {
+                case .apps:
+                    appsGrid
+                case .urls:
+                    urlsList
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        }
+    }
+
+    private var appsGrid: some View {
+        GeometryReader { proxy in
+            let columns = appGridColumns(for: proxy.size.width)
+            ScrollView(.vertical) {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                    ForEach(apps) { app in
+                        appCard(
+                            for: app,
+                            showsGroupBadge: true,
+                            supportsHoverBadge: true,
+                            hoverCardID: "top:\(app.id)"
+                        )
+                        .onDrag {
+                            draggingAppID = app.id
+                            return NSItemProvider(object: "app:\(app.id)" as NSString)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(height: 180)
+    }
+
+    private var urlsList: some View {
+        ScrollView(.vertical) {
+            LazyVStack(spacing: 8) {
+                ForEach(urlItems) { item in
+                    urlRow(item)
+                        .onDrag {
+                            NSItemProvider(object: "url:\(item.id.uuidString)" as NSString)
+                        }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: 180)
+    }
+
+    private func urlRow(_ item: BranchURLItem) -> some View {
+        let group = groupForURL(id: item.id)
+
+        return HStack(spacing: 10) {
+            Image(systemName: "globe")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+
+            Text(item.pattern)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer()
+
+            if let group {
+                HStack(spacing: 4) {
+                    Text(group.name)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Button {
+                        removeURLFromGroup(urlID: item.id)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.accentColor))
+                .frame(maxWidth: 56, alignment: .trailing)
+            }
+
+            Button("Edit") {
+                urlDraft = item.pattern
+                modalErrorMessage = nil
+                modal = .editURL(item.id)
+            }
+            .controlSize(.small)
+
+            Button("Delete") {
+                deleteURLItem(id: item.id)
+            }
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 36)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+    }
+
+    private var groupListCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(groupsTitle)
+                        .font(.headline)
+                    Spacer()
+                    Button("Create Group") {
+                        groupNameDraft = ""
+                        groupPromptDraft = ""
+                        modalErrorMessage = nil
+                        modal = .createGroup
+                    }
+                }
+
+                if groups.isEmpty {
+                    Text("No groups yet. Create a group, then drag apps or URLs into it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ScrollView(.vertical) {
+                        LazyVStack(spacing: 10) {
+                            ForEach(groups) { group in
+                                groupCard(for: group)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 224)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        }
+    }
+
+    private func appCard(
+        for app: BranchApp,
+        showsGroupBadge: Bool,
+        supportsHoverBadge: Bool,
+        hoverCardID: String,
+        removeAction: (() -> Void)? = nil
+    ) -> some View {
+        let group = groupForApp(bundleID: app.id)
+        let isDragging = draggingAppID == app.id
+        let isHovering = hoveredCardID == hoverCardID
+        let isAssigned = group != nil
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(nsImage: app.icon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                Text(app.name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    isDragging ? Color.accentColor : (isAssigned ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.10)),
+                    lineWidth: isDragging ? 1.5 : 1
+                )
+        }
+        .contentShape(Rectangle())
+        .overlay(alignment: .topTrailing) {
+            if showsGroupBadge, let group, isHovering {
+                HStack(spacing: 4) {
+                    Text(group.name)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Button {
+                        removeAppFromGroup(bundleID: app.id)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.accentColor))
+                .frame(maxWidth: 56, alignment: .trailing)
+                .padding(6)
+            } else if let removeAction, isHovering {
+                Button(action: removeAction) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.accentColor))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+            }
+        }
+        .onHover { hovering in
+            guard supportsHoverBadge else { return }
+            if hovering {
+                hoveredCardID = hoverCardID
+            } else if hoveredCardID == hoverCardID {
+                hoveredCardID = nil
+            }
+        }
+    }
+
+    private func urlCard(
+        for item: BranchURLItem,
+        hoverCardID: String,
+        removeAction: @escaping () -> Void
+    ) -> some View {
+        let isHovering = hoveredCardID == hoverCardID
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                Text(item.pattern)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: 1)
+        }
+        .contentShape(Rectangle())
+        .overlay(alignment: .topTrailing) {
+            if isHovering {
+                Button(action: removeAction) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.accentColor))
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+            }
+        }
+        .onTapGesture(count: 2) {
+            modal = .urlDetail(item)
+        }
+        .onHover { hovering in
+            if hovering {
+                hoveredCardID = hoverCardID
+            } else if hoveredCardID == hoverCardID {
+                hoveredCardID = nil
+            }
+        }
+    }
+
+    private func groupCard(for group: AppBranchGroup) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    setGroupExpanded(groupID: group.id, expanded: !group.isExpanded)
+                } label: {
+                    Image(systemName: group.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 14, height: 14)
+                }
+                .buttonStyle(.plain)
+
+                Text(group.name)
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text("\(group.appBundleIDs.count + group.urlPatternIDs.count) items")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button("Edit") {
+                    groupNameDraft = group.name
+                    groupPromptDraft = group.prompt
+                    modalErrorMessage = nil
+                    modal = .editGroup(group.id)
+                }
+                .controlSize(.small)
+
+                Button("Delete") {
+                    deleteGroup(groupID: group.id)
+                }
+                .controlSize(.small)
+            }
+
+            if group.isExpanded {
+                GeometryReader { proxy in
+                    let columns = appGridColumns(for: proxy.size.width)
+                    ScrollView(.vertical) {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                            ForEach(groupMembers(group: group)) { member in
+                                switch member.content {
+                                case .app(let app):
+                                    appCard(
+                                        for: app,
+                                        showsGroupBadge: false,
+                                        supportsHoverBadge: true,
+                                        hoverCardID: "group:\(group.id.uuidString):app:\(app.id)",
+                                        removeAction: {
+                                            removeAppFromGroup(bundleID: app.id)
+                                        }
+                                    )
+                                case .url(let item):
+                                    urlCard(
+                                        for: item,
+                                        hoverCardID: "group:\(group.id.uuidString):url:\(item.id.uuidString)",
+                                        removeAction: {
+                                            removeURLFromGroup(urlID: item.id)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(height: 150)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .onDrop(of: [UTType.text.identifier], isTargeted: nil) { providers in
+            handleDrop(providers: providers, groupID: group.id)
+        }
+    }
+
+    private var groupsTitle: String {
+        groups.isEmpty ? "Groups" : "Groups (\(groups.count))"
+    }
+
+    private func appGridColumns(for containerWidth: CGFloat) -> [GridItem] {
+        let safeWidth = max(containerWidth, 0)
+        let itemWidth = max(120, floor((safeWidth - 30) / 4))
+        return Array(repeating: GridItem(.fixed(itemWidth), spacing: 10), count: 4)
+    }
+
+    private func refreshApps() {
+        let runningApps = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+
+        var uniqueByBundleID: [String: BranchApp] = [:]
+        for running in runningApps {
+            guard let bundleID = running.bundleIdentifier, !bundleID.isEmpty else { continue }
+            let icon = running.icon ?? NSWorkspace.shared.icon(forFile: running.bundleURL?.path ?? "")
+            let name = running.localizedName ?? bundleID
+            uniqueByBundleID[bundleID] = BranchApp(id: bundleID, name: name, icon: icon)
+        }
+
+        apps = uniqueByBundleID.values.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private func groupForApp(bundleID: String) -> AppBranchGroup? {
+        groups.first { $0.appBundleIDs.contains(bundleID) }
+    }
+
+    private func groupForURL(id: UUID) -> AppBranchGroup? {
+        groups.first { $0.urlPatternIDs.contains(id) }
+    }
+
+    private func groupMembers(group: AppBranchGroup) -> [GroupMember] {
+        let appSet = Set(group.appBundleIDs)
+        let urlSet = Set(group.urlPatternIDs)
+
+        let appMembers = apps
+            .filter { appSet.contains($0.id) }
+            .map { GroupMember(content: .app($0)) }
+        let urlMembers = urlItems
+            .filter { urlSet.contains($0.id) }
+            .map { GroupMember(content: .url($0)) }
+        return appMembers + urlMembers
+    }
+
+    private func setGroupExpanded(groupID: UUID, expanded: Bool) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        groups[index].isExpanded = expanded
+    }
+
+    private func assignApp(bundleID: String, to groupID: UUID) {
+        for index in groups.indices {
+            groups[index].appBundleIDs.removeAll { $0 == bundleID }
+        }
+        guard let targetIndex = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        if !groups[targetIndex].appBundleIDs.contains(bundleID) {
+            groups[targetIndex].appBundleIDs.append(bundleID)
+        }
+    }
+
+    private func assignURL(urlID: UUID, to groupID: UUID) {
+        for index in groups.indices {
+            groups[index].urlPatternIDs.removeAll { $0 == urlID }
+        }
+        guard let targetIndex = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        if !groups[targetIndex].urlPatternIDs.contains(urlID) {
+            groups[targetIndex].urlPatternIDs.append(urlID)
+        }
+    }
+
+    private func removeAppFromGroup(bundleID: String) {
+        for index in groups.indices {
+            groups[index].appBundleIDs.removeAll { $0 == bundleID }
+        }
+    }
+
+    private func removeURLFromGroup(urlID: UUID) {
+        for index in groups.indices {
+            groups[index].urlPatternIDs.removeAll { $0 == urlID }
+        }
+    }
+
+    private func deleteURLItem(id: UUID) {
+        urlItems.removeAll { $0.id == id }
+        removeURLFromGroup(urlID: id)
+    }
+
+    private func deleteGroup(groupID: UUID) {
+        groups.removeAll { $0.id == groupID }
+    }
+
+    private func saveGroup(state: AppBranchModal) {
+        let trimmedName = groupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            modalErrorMessage = "Group name is required."
+            return
+        }
+
+        switch state {
+        case .createGroup:
+            groups.append(
+                AppBranchGroup(
+                    id: UUID(),
+                    name: trimmedName,
+                    prompt: groupPromptDraft,
+                    appBundleIDs: [],
+                    urlPatternIDs: [],
+                    isExpanded: true
+                )
+            )
+        case .editGroup(let groupID):
+            guard let index = groups.firstIndex(where: { $0.id == groupID }) else { break }
+            groups[index].name = trimmedName
+            groups[index].prompt = groupPromptDraft
+        default:
+            break
+        }
+
+        modal = nil
+    }
+
+    private func saveAddedURLs() {
+        let entries = urlDraft
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !entries.isEmpty else {
+            modalErrorMessage = "Enter at least one URL pattern."
+            return
+        }
+
+        let normalizedInput = entries.map(normalizedPattern)
+        if Set(normalizedInput).count != normalizedInput.count {
+            modalErrorMessage = "Duplicate URL patterns detected in input."
+            return
+        }
+
+        if let invalid = entries.first(where: { !isValidWildcardURLPattern($0) }) {
+            modalErrorMessage = "Invalid URL pattern: \(invalid). Use wildcard format like google.com/*."
+            return
+        }
+
+        let existing = Set(urlItems.map { normalizedPattern($0.pattern) })
+        if normalizedInput.contains(where: { existing.contains($0) }) {
+            modalErrorMessage = "Some URL patterns already exist."
+            return
+        }
+
+        let newItems = entries.map { BranchURLItem(id: UUID(), pattern: $0) }
+        urlItems.append(contentsOf: newItems)
+        modal = nil
+    }
+
+    private func saveEditedURL(urlID: UUID) {
+        let trimmed = urlDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            modalErrorMessage = "URL pattern is required."
+            return
+        }
+
+        guard isValidWildcardURLPattern(trimmed) else {
+            modalErrorMessage = "Invalid URL pattern. Use wildcard format like google.com/*."
+            return
+        }
+
+        let normalized = normalizedPattern(trimmed)
+        let others = Set(urlItems.filter { $0.id != urlID }.map { normalizedPattern($0.pattern) })
+        if others.contains(normalized) {
+            modalErrorMessage = "URL pattern already exists."
+            return
+        }
+
+        guard let index = urlItems.firstIndex(where: { $0.id == urlID }) else {
+            modal = nil
+            return
+        }
+        urlItems[index].pattern = trimmed
+        modal = nil
+    }
+
+    private func normalizedPattern(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func isValidWildcardURLPattern(_ pattern: String) -> Bool {
+        let value = normalizedPattern(pattern)
+        guard !value.isEmpty else { return false }
+        guard !value.contains("://") else { return false }
+        guard !value.contains(" ") else { return false }
+        guard value.contains(".") else { return false }
+        guard value.contains("/") else { return false }
+
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-._/*")
+        return value.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    private func loadPersistedGroups() {
+        guard let data = UserDefaults.standard.data(forKey: AppPreferenceKey.appBranchGroups) else {
+            return
+        }
+        do {
+            groups = try JSONDecoder().decode([AppBranchGroup].self, from: data)
+        } catch {
+            groups = []
+        }
+    }
+
+    private func saveGroups() {
+        do {
+            let data = try JSONEncoder().encode(groups)
+            UserDefaults.standard.set(data, forKey: AppPreferenceKey.appBranchGroups)
+        } catch {
+            VoxtLog.error("Failed to persist app branch groups: \(error.localizedDescription)")
+        }
+    }
+
+    private func loadPersistedURLs() {
+        guard let data = UserDefaults.standard.data(forKey: AppPreferenceKey.appBranchURLs) else {
+            return
+        }
+        do {
+            urlItems = try JSONDecoder().decode([BranchURLItem].self, from: data)
+        } catch {
+            urlItems = []
+        }
+    }
+
+    private func saveURLs() {
+        do {
+            let data = try JSONEncoder().encode(urlItems)
+            UserDefaults.standard.set(data, forKey: AppPreferenceKey.appBranchURLs)
+        } catch {
+            VoxtLog.error("Failed to persist app branch URLs: \(error.localizedDescription)")
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider], groupID: UUID) -> Bool {
+        guard let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else {
+            return false
+        }
+
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+            guard let rawValue = object as? NSString else { return }
+            let value = rawValue as String
+            DispatchQueue.main.async {
+                if value.hasPrefix("app:") {
+                    let bundleID = String(value.dropFirst(4))
+                    assignApp(bundleID: bundleID, to: groupID)
+                    draggingAppID = nil
+                } else if value.hasPrefix("url:") {
+                    let rawID = String(value.dropFirst(4))
+                    if let urlID = UUID(uuidString: rawID) {
+                        assignURL(urlID: urlID, to: groupID)
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    @ViewBuilder
+    private func modalView(for currentModal: AppBranchModal) -> some View {
+        switch currentModal {
+        case .createGroup, .editGroup:
+            GroupEditorSheet(
+                title: currentModal.title,
+                actionTitle: currentModal.actionTitle,
+                name: $groupNameDraft,
+                prompt: $groupPromptDraft,
+                errorMessage: modalErrorMessage,
+                onCancel: {
+                    modal = nil
+                },
+                onSave: {
+                    saveGroup(state: currentModal)
+                }
+            )
+            .frame(width: 460, height: 410)
+
+        case .addURLs:
+            URLBatchEditorSheet(
+                title: "Add URL Patterns",
+                actionTitle: "Add",
+                text: $urlDraft,
+                errorMessage: modalErrorMessage,
+                onCancel: {
+                    modal = nil
+                },
+                onSave: {
+                    saveAddedURLs()
+                }
+            )
+            .frame(width: 500, height: 420)
+
+        case .editURL(let urlID):
+            URLBatchEditorSheet(
+                title: "Edit URL Pattern",
+                actionTitle: "Save",
+                text: $urlDraft,
+                errorMessage: modalErrorMessage,
+                onCancel: {
+                    modal = nil
+                },
+                onSave: {
+                    saveEditedURL(urlID: urlID)
+                }
+            )
+            .frame(width: 500, height: 360)
+
+        case .urlDetail(let item):
+            URLDetailSheet(
+                pattern: item.pattern,
+                onClose: { modal = nil }
+            )
+            .frame(width: 520, height: 260)
+        }
+    }
+}
+
+private enum SourceTab: String, CaseIterable, Identifiable {
+    case apps
+    case urls
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .apps: return "Apps"
+        case .urls: return "URLs"
+        }
+    }
+}
+
+private struct BranchApp: Identifiable {
+    let id: String
+    let name: String
+    let icon: NSImage
+}
+
+private struct BranchURLItem: Identifiable, Codable, Equatable {
+    let id: UUID
+    var pattern: String
+}
+
+private struct AppBranchGroup: Identifiable, Codable, Equatable {
+    let id: UUID
+    var name: String
+    var prompt: String
+    var appBundleIDs: [String]
+    var urlPatternIDs: [UUID]
+    var isExpanded: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case prompt
+        case appBundleIDs
+        case urlPatternIDs
+        case isExpanded
+    }
+
+    init(id: UUID, name: String, prompt: String, appBundleIDs: [String], urlPatternIDs: [UUID], isExpanded: Bool) {
+        self.id = id
+        self.name = name
+        self.prompt = prompt
+        self.appBundleIDs = appBundleIDs
+        self.urlPatternIDs = urlPatternIDs
+        self.isExpanded = isExpanded
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        appBundleIDs = try container.decodeIfPresent([String].self, forKey: .appBundleIDs) ?? []
+        urlPatternIDs = try container.decodeIfPresent([UUID].self, forKey: .urlPatternIDs) ?? []
+        isExpanded = try container.decodeIfPresent(Bool.self, forKey: .isExpanded) ?? true
+    }
+}
+
+private struct GroupMember: Identifiable {
+    let content: GroupMemberContent
+
+    var id: String {
+        switch content {
+        case .app(let app): return "app:\(app.id)"
+        case .url(let item): return "url:\(item.id.uuidString)"
+        }
+    }
+}
+
+private enum GroupMemberContent {
+    case app(BranchApp)
+    case url(BranchURLItem)
+}
+
+private enum AppBranchModal: Identifiable {
+    case createGroup
+    case editGroup(UUID)
+    case addURLs
+    case editURL(UUID)
+    case urlDetail(BranchURLItem)
+
+    var id: String {
+        switch self {
+        case .createGroup:
+            return "create-group"
+        case .editGroup(let groupID):
+            return "edit-group-\(groupID.uuidString)"
+        case .addURLs:
+            return "add-urls"
+        case .editURL(let urlID):
+            return "edit-url-\(urlID.uuidString)"
+        case .urlDetail(let item):
+            return "url-detail-\(item.id.uuidString)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .createGroup:
+            return "Create Group"
+        case .editGroup:
+            return "Edit Group"
+        case .addURLs:
+            return "Add URL Patterns"
+        case .editURL:
+            return "Edit URL Pattern"
+        case .urlDetail:
+            return "URL Detail"
+        }
+    }
+
+    var actionTitle: String {
+        switch self {
+        case .createGroup:
+            return "Create"
+        case .editGroup:
+            return "Save"
+        case .addURLs:
+            return "Add"
+        case .editURL:
+            return "Save"
+        case .urlDetail:
+            return ""
+        }
+    }
+}
+
+private struct GroupEditorSheet: View {
+    let title: String
+    let actionTitle: String
+    @Binding var name: String
+    @Binding var prompt: String
+    let errorMessage: String?
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Group Name")
+                    .font(.headline)
+                TextField("Enter group name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Prompt")
+                    .font(.headline)
+                TextEditor(text: $prompt)
+                    .font(.system(size: 13))
+                    .lineSpacing(4)
+                    .padding(8)
+                    .frame(minHeight: 160, alignment: .topLeading)
+                    .scrollContentBackground(.hidden)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    )
+            }
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Spacer(minLength: 6)
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                Button(actionTitle, action: onSave)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
+    }
+}
+
+private struct URLBatchEditorSheet: View {
+    let title: String
+    let actionTitle: String
+    @Binding var text: String
+    let errorMessage: String?
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("URL Patterns")
+                    .font(.headline)
+                TextEditor(text: $text)
+                    .font(.system(size: 13))
+                    .lineSpacing(4)
+                    .padding(8)
+                    .frame(minHeight: 180, alignment: .topLeading)
+                    .scrollContentBackground(.hidden)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    )
+
+                Text("Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Spacer(minLength: 6)
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                Button(actionTitle, action: onSave)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
+    }
+}
+
+private struct URLDetailSheet: View {
+    let pattern: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("URL Detail")
+                .font(.title3.weight(.semibold))
+
+            Text(pattern)
+                .font(.system(size: 13))
+                .textSelection(.enabled)
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                )
+
+            HStack {
+                Spacer()
+                Button("Close", action: onClose)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+    }
+}

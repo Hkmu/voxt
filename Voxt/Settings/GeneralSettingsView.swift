@@ -10,6 +10,7 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.translationTargetLanguage) private var translationTargetLanguageRaw = TranslationTargetLanguage.english.rawValue
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) private var autoCopyWhenNoFocusedInput = false
+    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
     @AppStorage(AppPreferenceKey.launchAtLogin) private var launchAtLogin = false
     @AppStorage(AppPreferenceKey.showInDock) private var showInDock = false
     @AppStorage(AppPreferenceKey.autoCheckForUpdates) private var autoCheckForUpdates = true
@@ -159,6 +160,11 @@ struct GeneralSettingsView: View {
 
                     Toggle("Also copy result to clipboard", isOn: $autoCopyWhenNoFocusedInput)
                     Text("When enabled, Voxt auto-pastes result text and also keeps it in clipboard.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Toggle("App Enhancement", isOn: $appEnhancementEnabled)
+                    Text("Show the App Enhancement menu and enable app-based enhancement configuration.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
