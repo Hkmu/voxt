@@ -397,7 +397,7 @@ struct AppEnhancementSettingsView: View {
                 Text(group.name)
                     .font(.system(size: 13, weight: .semibold))
 
-                Text("\(members.count) items")
+                Text(AppLocalization.format("%d items", members.count))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
 
@@ -463,7 +463,7 @@ struct AppEnhancementSettingsView: View {
     }
 
     private var groupsTitle: String {
-        groups.isEmpty ? "Groups" : "Groups (\(groups.count))"
+        groups.isEmpty ? AppLocalization.localizedString("Groups") : AppLocalization.format("Groups (%d)", groups.count)
     }
 
     private func appGridColumns(for containerWidth: CGFloat) -> [GridItem] {
@@ -600,7 +600,7 @@ struct AppEnhancementSettingsView: View {
     private func saveGroup(state: AppBranchModal) {
         let trimmedName = groupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            modalErrorMessage = "Group name is required."
+            modalErrorMessage = AppLocalization.localizedString("Group name is required.")
             return
         }
 
@@ -635,25 +635,25 @@ struct AppEnhancementSettingsView: View {
             .filter { !$0.isEmpty }
 
         guard !entries.isEmpty else {
-            modalErrorMessage = "Enter at least one URL pattern."
+            modalErrorMessage = AppLocalization.localizedString("Enter at least one URL pattern.")
             return
         }
 
         let canonicalEntries = entries.map(canonicalizedPattern)
         let normalizedInput = canonicalEntries.map(normalizedPattern)
         if Set(normalizedInput).count != normalizedInput.count {
-            modalErrorMessage = "Duplicate URL patterns detected in input."
+            modalErrorMessage = AppLocalization.localizedString("Duplicate URL patterns detected in input.")
             return
         }
 
         if let invalid = canonicalEntries.first(where: { !isValidWildcardURLPattern($0) }) {
-            modalErrorMessage = "Invalid URL pattern: \(invalid). Use wildcard format like google.com/*."
+            modalErrorMessage = AppLocalization.format("Invalid URL pattern: %@. Use wildcard format like google.com/*.", invalid)
             return
         }
 
         let existing = Set(urlItems.map { normalizedPattern($0.pattern) })
         if normalizedInput.contains(where: { existing.contains($0) }) {
-            modalErrorMessage = "Some URL patterns already exist."
+            modalErrorMessage = AppLocalization.localizedString("Some URL patterns already exist.")
             return
         }
 
@@ -665,19 +665,19 @@ struct AppEnhancementSettingsView: View {
     private func saveEditedURL(urlID: UUID) {
         let canonical = canonicalizedPattern(urlDraft)
         guard !canonical.isEmpty else {
-            modalErrorMessage = "URL pattern is required."
+            modalErrorMessage = AppLocalization.localizedString("URL pattern is required.")
             return
         }
 
         guard isValidWildcardURLPattern(canonical) else {
-            modalErrorMessage = "Invalid URL pattern. Use wildcard format like google.com/*."
+            modalErrorMessage = AppLocalization.localizedString("Invalid URL pattern. Use wildcard format like google.com/*.")
             return
         }
 
         let normalized = normalizedPattern(canonical)
         let others = Set(urlItems.filter { $0.id != urlID }.map { normalizedPattern($0.pattern) })
         if others.contains(normalized) {
-            modalErrorMessage = "URL pattern already exists."
+            modalErrorMessage = AppLocalization.localizedString("URL pattern already exists.")
             return
         }
 
@@ -807,8 +807,8 @@ struct AppEnhancementSettingsView: View {
 
         case .addURLs:
             URLBatchEditorSheet(
-                title: "Add URL Patterns",
-                actionTitle: "Add",
+                title: currentModal.title,
+                actionTitle: currentModal.actionTitle,
                 text: $urlDraft,
                 errorMessage: modalErrorMessage,
                 onCancel: {
@@ -822,8 +822,8 @@ struct AppEnhancementSettingsView: View {
 
         case .editURL(let urlID):
             URLBatchEditorSheet(
-                title: "Edit URL Pattern",
-                actionTitle: "Save",
+                title: currentModal.title,
+                actionTitle: currentModal.actionTitle,
                 text: $urlDraft,
                 errorMessage: modalErrorMessage,
                 onCancel: {
@@ -845,309 +845,3 @@ struct AppEnhancementSettingsView: View {
     }
 }
 
-private enum SourceTab: String, CaseIterable, Identifiable {
-    case apps
-    case urls
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .apps: return "Apps"
-        case .urls: return "URLs"
-        }
-    }
-}
-
-private struct BranchApp: Identifiable {
-    let id: String
-    let name: String
-    let icon: NSImage
-}
-
-private struct BranchURLItem: Identifiable, Codable, Equatable {
-    let id: UUID
-    var pattern: String
-}
-
-private struct AppBranchAppRef: Codable, Equatable {
-    let bundleID: String
-    var displayName: String
-}
-
-private struct AppBranchGroup: Identifiable, Codable, Equatable {
-    let id: UUID
-    var name: String
-    var prompt: String
-    var appBundleIDs: [String]
-    var appRefs: [AppBranchAppRef]
-    var urlPatternIDs: [UUID]
-    var isExpanded: Bool
-
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case prompt
-        case appBundleIDs
-        case appRefs
-        case urlPatternIDs
-        case isExpanded
-    }
-
-    init(
-        id: UUID,
-        name: String,
-        prompt: String,
-        appBundleIDs: [String],
-        appRefs: [AppBranchAppRef],
-        urlPatternIDs: [UUID],
-        isExpanded: Bool
-    ) {
-        self.id = id
-        self.name = name
-        self.prompt = prompt
-        self.appBundleIDs = appBundleIDs
-        self.appRefs = appRefs
-        self.urlPatternIDs = urlPatternIDs
-        self.isExpanded = isExpanded
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        name = try container.decode(String.self, forKey: .name)
-        prompt = try container.decode(String.self, forKey: .prompt)
-        appBundleIDs = try container.decodeIfPresent([String].self, forKey: .appBundleIDs) ?? []
-        let decodedRefs = try container.decodeIfPresent([AppBranchAppRef].self, forKey: .appRefs) ?? []
-        if decodedRefs.isEmpty {
-            appRefs = appBundleIDs.map { AppBranchAppRef(bundleID: $0, displayName: $0) }
-        } else {
-            appRefs = decodedRefs
-        }
-        urlPatternIDs = try container.decodeIfPresent([UUID].self, forKey: .urlPatternIDs) ?? []
-        isExpanded = try container.decodeIfPresent(Bool.self, forKey: .isExpanded) ?? true
-    }
-}
-
-private struct GroupMember: Identifiable {
-    let content: GroupMemberContent
-
-    var id: String {
-        switch content {
-        case .app(let appMember): return "app:\(appMember.app.id)"
-        case .url(let item): return "url:\(item.id.uuidString)"
-        }
-    }
-}
-
-private struct GroupAppMember {
-    let app: BranchApp
-    let isRunning: Bool
-}
-
-private enum GroupMemberContent {
-    case app(GroupAppMember)
-    case url(BranchURLItem)
-}
-
-private enum AppBranchModal: Identifiable {
-    case createGroup
-    case editGroup(UUID)
-    case addURLs
-    case editURL(UUID)
-    case urlDetail(BranchURLItem)
-
-    var id: String {
-        switch self {
-        case .createGroup:
-            return "create-group"
-        case .editGroup(let groupID):
-            return "edit-group-\(groupID.uuidString)"
-        case .addURLs:
-            return "add-urls"
-        case .editURL(let urlID):
-            return "edit-url-\(urlID.uuidString)"
-        case .urlDetail(let item):
-            return "url-detail-\(item.id.uuidString)"
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .createGroup:
-            return "Create Group"
-        case .editGroup:
-            return "Edit Group"
-        case .addURLs:
-            return "Add URL Patterns"
-        case .editURL:
-            return "Edit URL Pattern"
-        case .urlDetail:
-            return "URL Detail"
-        }
-    }
-
-    var actionTitle: String {
-        switch self {
-        case .createGroup:
-            return "Create"
-        case .editGroup:
-            return "Save"
-        case .addURLs:
-            return "Add"
-        case .editURL:
-            return "Save"
-        case .urlDetail:
-            return ""
-        }
-    }
-}
-
-private struct GroupEditorSheet: View {
-    let title: String
-    let actionTitle: String
-    @Binding var name: String
-    @Binding var prompt: String
-    let errorMessage: String?
-    let onCancel: () -> Void
-    let onSave: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Group Name")
-                    .font(.headline)
-                TextField("Enter group name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Prompt")
-                    .font(.headline)
-                TextEditor(text: $prompt)
-                    .font(.system(size: 13))
-                    .lineSpacing(4)
-                    .padding(8)
-                    .frame(minHeight: 160, alignment: .topLeading)
-                    .scrollContentBackground(.hidden)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                    )
-            }
-
-            if let errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Spacer(minLength: 6)
-
-            HStack {
-                Spacer()
-                Button("Cancel", action: onCancel)
-                Button(actionTitle, action: onSave)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 24)
-    }
-}
-
-private struct URLBatchEditorSheet: View {
-    let title: String
-    let actionTitle: String
-    @Binding var text: String
-    let errorMessage: String?
-    let onCancel: () -> Void
-    let onSave: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("URL Patterns")
-                    .font(.headline)
-                TextEditor(text: $text)
-                    .font(.system(size: 13))
-                    .lineSpacing(4)
-                    .padding(8)
-                    .frame(minHeight: 180, alignment: .topLeading)
-                    .scrollContentBackground(.hidden)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                    )
-
-                Text("Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Spacer(minLength: 6)
-
-            HStack {
-                Spacer()
-                Button("Cancel", action: onCancel)
-                Button(actionTitle, action: onSave)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 24)
-    }
-}
-
-private struct URLDetailSheet: View {
-    let pattern: String
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("URL Detail")
-                .font(.title3.weight(.semibold))
-
-            Text(pattern)
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .padding(10)
-                .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                )
-
-            HStack {
-                Spacer()
-                Button("Close", action: onClose)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-    }
-}

@@ -24,7 +24,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "History"
         case .report: return "Report"
         case .model: return "Model"
-        case .appEnhancement: return "app branch"
+        case .appEnhancement: return "App Branch"
         case .hotkey: return "Hotkey"
         case .about: return "About"
         }
@@ -39,7 +39,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "History"
         case .report: return "Report"
         case .model: return "Model"
-        case .appEnhancement: return "app branch"
+        case .appEnhancement: return "App Branch"
         case .hotkey: return "Hotkey"
         case .about: return "About"
         }

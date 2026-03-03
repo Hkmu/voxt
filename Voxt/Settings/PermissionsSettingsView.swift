@@ -186,7 +186,7 @@ struct PermissionsSettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(target.title)
                     .font(.subheadline)
-                Text("Allow Voxt to read the active URL in \(target.title).")
+                Text(AppLocalization.format("Allow Voxt to read the active URL in %@.", target.title))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
