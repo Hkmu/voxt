@@ -265,3 +265,4 @@
 "URL Group" = "URL 分组";
 "Show the App Enhancement menu and enable app-based enhancement configuration." = "显示应用增强菜单，并启用按应用配置的增强规则。";
 "Let Sparkle periodically check for updates in the background." = "让 Sparkle 在后台定期检查更新。";
+"Tip: Drag resources into groups below." = "提示：可将资源拖拽到下方分组中。";

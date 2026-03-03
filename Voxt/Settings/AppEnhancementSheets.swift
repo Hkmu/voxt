@@ -15,14 +15,14 @@ struct GroupEditorSheet: View {
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Group Name")
+                Text(AppLocalization.localizedString("Group Name"))
                     .font(.headline)
-                TextField("Enter group name", text: $name)
+                TextField(AppLocalization.localizedString("Enter group name"), text: $name)
                     .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Prompt")
+                Text(AppLocalization.localizedString("Prompt"))
                     .font(.headline)
                 TextEditor(text: $prompt)
                     .font(.system(size: 13))
@@ -50,7 +50,7 @@ struct GroupEditorSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel)
+                Button(AppLocalization.localizedString("Cancel"), action: onCancel)
                 Button(actionTitle, action: onSave)
                     .keyboardShortcut(.defaultAction)
             }
@@ -74,7 +74,7 @@ struct URLBatchEditorSheet: View {
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("URL Patterns")
+                Text(AppLocalization.localizedString("URL Patterns"))
                     .font(.headline)
                 TextEditor(text: $text)
                     .font(.system(size: 13))
@@ -91,7 +91,7 @@ struct URLBatchEditorSheet: View {
                             .stroke(Color.primary.opacity(0.10), lineWidth: 1)
                     )
 
-                Text("Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc")
+                Text(AppLocalization.localizedString("Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -106,7 +106,7 @@ struct URLBatchEditorSheet: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel)
+                Button(AppLocalization.localizedString("Cancel"), action: onCancel)
                 Button(actionTitle, action: onSave)
                     .keyboardShortcut(.defaultAction)
             }
@@ -122,7 +122,7 @@ struct URLDetailSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("URL Detail")
+            Text(AppLocalization.localizedString("URL Detail"))
                 .font(.title3.weight(.semibold))
 
             Text(pattern)
@@ -141,7 +141,7 @@ struct URLDetailSheet: View {
 
             HStack {
                 Spacer()
-                Button("Close", action: onClose)
+                Button(AppLocalization.localizedString("Close"), action: onClose)
                     .keyboardShortcut(.defaultAction)
             }
         }

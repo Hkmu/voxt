@@ -54,6 +54,16 @@ class CustomLLMModelManager: ObservableObject {
             id: "Qwen/Qwen2.5-3B-Instruct",
             title: "Qwen2.5 3B Instruct",
             description: "Larger instruction model with stronger reasoning and formatting quality."
+        ),
+        ModelOption(
+            id: "mlx-community/Qwen3.5-0.8B-MLX-4bit",
+            title: "Qwen3.5 0.8B (4bit)",
+            description: "Fast lightweight Qwen3.5 model with MLX-compatible quantization."
+        ),
+        ModelOption(
+            id: "mlx-community/Qwen3.5-2B-MLX-4bit",
+            title: "Qwen3.5 2B (4bit)",
+            description: "Stronger Qwen3.5 model for better enhancement quality."
         )
     ]
 
@@ -64,6 +74,7 @@ class CustomLLMModelManager: ObservableObject {
     private var modelRepo: String
     private var hubBaseURL: URL
     private var downloadTask: Task<Void, Never>?
+    private var downloadProgressTask: Task<Void, Never>?
     private var sizeTask: Task<Void, Never>?
     private var inferenceContainer: ModelContainer?
     private var inferenceModelRepo: String?
@@ -255,7 +266,10 @@ class CustomLLMModelManager: ObservableObject {
 
         downloadTask = Task { [weak self] in
             guard let self else { return }
-            defer { downloadTask = nil }
+            defer {
+                cancelDownloadProgressTask()
+                downloadTask = nil
+            }
             setDownloadingState(progress: 0, completed: 0, total: 0, currentFile: nil, completedFiles: 0, totalFiles: 0)
 
             do {
@@ -299,9 +313,9 @@ class CustomLLMModelManager: ObservableObject {
                 try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
 
                 for (index, entry) in entries.enumerated() {
-                    let progress = Progress(totalUnitCount: max(entry.size ?? 1, 1))
+                    let expectedFileBytes = max(entry.size ?? 0, 0)
+                    let progress = Progress(totalUnitCount: max(expectedFileBytes, 1))
                     let fileBaseCompleted = completedBytes
-                    let expectedFileBytes = max(entry.size ?? 1, 1)
                     setDownloadingState(
                         progress: min(1, Double(completedBytes) / Double(totalBytes)),
                         completed: min(completedBytes, totalBytes),
@@ -311,14 +325,16 @@ class CustomLLMModelManager: ObservableObject {
                         totalFiles: totalFiles
                     )
 
-                    let progressUpdateTask = Task { [weak self] in
+                    cancelDownloadProgressTask()
+                    downloadProgressTask = Task { [weak self] in
+                        let startTime = Date()
                         while !Task.isCancelled {
                             await MainActor.run {
                                 guard let self else { return }
-                                let reported = max(progress.completedUnitCount, 0)
-                                let effectiveCurrentFileCompleted = min(
-                                    max(reported, 0),
-                                    max(expectedFileBytes, max(progress.totalUnitCount, 1))
+                                let effectiveCurrentFileCompleted = Self.inFlightBytes(
+                                    progress: progress,
+                                    expectedFileBytes: expectedFileBytes,
+                                    startTime: startTime
                                 )
                                 let aggregateCompleted = min(
                                     fileBaseCompleted + effectiveCurrentFileCompleted,
@@ -333,7 +349,7 @@ class CustomLLMModelManager: ObservableObject {
                                     totalFiles: totalFiles
                                 )
                             }
-                            try? await Task.sleep(for: .milliseconds(120))
+                            try? await Task.sleep(for: .milliseconds(200))
                         }
                     }
 
@@ -347,9 +363,10 @@ class CustomLLMModelManager: ObservableObject {
                         transport: .lfs,
                         localFilesOnly: false
                     )
-                    progressUpdateTask.cancel()
+                    cancelDownloadProgressTask()
 
-                    completedBytes += max(entry.size ?? progress.completedUnitCount, 0)
+                    let delta = max(expectedFileBytes, max(progress.completedUnitCount, 0))
+                    completedBytes += max(delta, 0)
                     setDownloadingState(
                         progress: min(1, Double(completedBytes) / Double(totalBytes)),
                         completed: min(completedBytes, totalBytes),
@@ -369,9 +386,11 @@ class CustomLLMModelManager: ObservableObject {
                 state = .downloaded
                 VoxtLog.info("Custom LLM download completed: \(modelRepo)")
             } catch is CancellationError {
+                cancelDownloadProgressTask()
                 state = .notDownloaded
                 VoxtLog.warning("Custom LLM download cancelled: \(modelRepo)")
             } catch {
+                cancelDownloadProgressTask()
                 state = .error("Download failed: \(error.localizedDescription)")
                 VoxtLog.error("Custom LLM download failed: \(modelRepo), error=\(error.localizedDescription)")
             }
@@ -384,11 +403,16 @@ class CustomLLMModelManager: ObservableObject {
     }
 
     func cancelDownload() {
-        guard downloadTask != nil else { return }
         VoxtLog.info("Custom LLM download cancellation requested: \(modelRepo)")
         downloadTask?.cancel()
+        cancelDownloadProgressTask()
         downloadTask = nil
         state = .notDownloaded
+    }
+
+    private func cancelDownloadProgressTask() {
+        downloadProgressTask?.cancel()
+        downloadProgressTask = nil
     }
 
     func deleteModel() {
@@ -481,6 +505,22 @@ class CustomLLMModelManager: ObservableObject {
             completedFiles: completedFiles,
             totalFiles: totalFiles
         )
+    }
+
+    private static func inFlightBytes(
+        progress: Progress,
+        expectedFileBytes: Int64,
+        startTime: Date
+    ) -> Int64 {
+        let reported = max(progress.completedUnitCount, 0)
+        guard reported == 0 else { return reported }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        let expectedForTenMinutes = Double(expectedFileBytes) / (10 * 60)
+        let fallbackRate = max(expectedForTenMinutes, 256 * 1024)
+        let estimated = Int64(elapsed * fallbackRate)
+        let cap = Int64(Double(expectedFileBytes) * 0.95)
+        return min(max(estimated, 0), max(cap, 0))
     }
 
     private static func cacheDirectory(for repo: String) -> URL? {

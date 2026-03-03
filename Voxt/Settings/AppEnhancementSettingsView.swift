@@ -3,6 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct AppEnhancementSettingsView: View {
+    @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @State private var apps: [BranchApp] = []
     @State private var urlItems: [BranchURLItem] = []
     @State private var groups: [AppBranchGroup] = []
@@ -39,6 +40,7 @@ struct AppEnhancementSettingsView: View {
         .sheet(item: $modal) { currentModal in
             modalView(for: currentModal)
         }
+        .id(interfaceLanguageRaw)
     }
 
     private var sourceListCard: some View {
@@ -49,8 +51,12 @@ struct AppEnhancementSettingsView: View {
 
                     Spacer()
 
-                    if sourceTab == .urls {
-                        Button("Add") {
+                    if sourceTab == .apps {
+                        Text(AppLocalization.localizedString("Tip: Drag resources into groups below."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if sourceTab == .urls {
+                        Button(AppLocalization.localizedString("Add")) {
                             urlDraft = ""
                             modalErrorMessage = nil
                             modal = .addURLs
@@ -182,14 +188,14 @@ struct AppEnhancementSettingsView: View {
                 .frame(maxWidth: 56, alignment: .trailing)
             }
 
-            Button("Edit") {
+            Button(AppLocalization.localizedString("Edit")) {
                 urlDraft = item.pattern
                 modalErrorMessage = nil
                 modal = .editURL(item.id)
             }
             .controlSize(.small)
 
-            Button("Delete") {
+            Button(AppLocalization.localizedString("Delete")) {
                 deleteURLItem(id: item.id)
             }
             .controlSize(.small)
@@ -209,7 +215,7 @@ struct AppEnhancementSettingsView: View {
                     Text(groupsTitle)
                         .font(.headline)
                     Spacer()
-                    Button("Create Group") {
+                    Button(AppLocalization.localizedString("Create Group")) {
                         groupNameDraft = ""
                         groupPromptDraft = ""
                         modalErrorMessage = nil
@@ -218,7 +224,7 @@ struct AppEnhancementSettingsView: View {
                 }
 
                 if groups.isEmpty {
-                    Text("No groups yet. Create a group, then drag apps or URLs into it.")
+                    Text(AppLocalization.localizedString("No groups yet. Create a group, then drag apps or URLs into it."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -403,7 +409,7 @@ struct AppEnhancementSettingsView: View {
 
                 Spacer()
 
-                Button("Edit") {
+                Button(AppLocalization.localizedString("Edit")) {
                     groupNameDraft = group.name
                     groupPromptDraft = group.prompt
                     modalErrorMessage = nil
@@ -411,7 +417,7 @@ struct AppEnhancementSettingsView: View {
                 }
                 .controlSize(.small)
 
-                Button("Delete") {
+                Button(AppLocalization.localizedString("Delete")) {
                     deleteGroup(groupID: group.id)
                 }
                 .controlSize(.small)

@@ -265,3 +265,4 @@
 "URL Group" = "URL グループ";
 "Show the App Enhancement menu and enable app-based enhancement configuration." = "App Enhancement メニューを表示し、アプリ別の強化設定を有効にします。";
 "Let Sparkle periodically check for updates in the background." = "Sparkle がバックグラウンドで定期的に更新を確認します。";
+"Tip: Drag resources into groups below." = "ヒント: 下のグループへリソースをドラッグできます。";
