@@ -453,6 +453,10 @@ struct ModelSettingsView: View {
             return AppLocalization.format("Downloading %@", downloadProgressText(completed: completed, total: total))
         }
 
+        if isCurrentModel(repo), case .error(let message) = mlxModelManager.state {
+            return "Error: \(message)"
+        }
+
         let installedSize = mlxModelManager.modelSizeOnDisk(repo: repo)
         if mlxModelManager.isModelDownloaded(repo: repo) {
             if installedSize.isEmpty {
@@ -505,6 +509,10 @@ struct ModelSettingsView: View {
         if isDownloadingCustomLLM(repo),
            case .downloading(_, let completed, let total, _, _, _) = customLLMManager.state {
             return AppLocalization.format("Downloading %@", downloadProgressText(completed: completed, total: total))
+        }
+
+        if isCurrentCustomLLM(repo), case .error(let message) = customLLMManager.state {
+            return "Error: \(message)"
         }
 
         let installedSize = customLLMManager.modelSizeOnDisk(repo: repo)

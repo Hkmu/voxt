@@ -537,13 +537,14 @@ class MLXModelManager: ObservableObject {
         tempDir: URL,
         progress: Progress
     ) async throws {
+        let destination = try destinationFileURL(for: entryPath, under: tempDir)
         var attempt = 0
         while true {
             do {
                 _ = try await client.downloadFile(
                     at: entryPath,
                     from: repoID,
-                    to: tempDir,
+                    to: destination,
                     kind: .model,
                     revision: "main",
                     progress: progress,
@@ -563,6 +564,24 @@ class MLXModelManager: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(delayMs))
             }
         }
+    }
+
+    private func destinationFileURL(for entryPath: String, under directory: URL) throws -> URL {
+        let base = directory.standardizedFileURL
+        let destination = base.appendingPathComponent(entryPath).standardizedFileURL
+        let basePrefix = base.path.hasSuffix("/") ? base.path : "\(base.path)/"
+        guard destination.path.hasPrefix(basePrefix) else {
+            throw NSError(
+                domain: "MLXModelManager",
+                code: 1002,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid model file path: \(entryPath)"]
+            )
+        }
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        return destination
     }
 
     private func setDownloadingState(
