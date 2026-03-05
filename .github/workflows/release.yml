@@ -575,7 +575,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
       VERSION: ${{ needs.preflight.outputs.version }}
       TAG: ${{ needs.preflight.outputs.tag }}
       DRAFT_RELEASE: ${{ needs.preflight.outputs.draft_release }}
@@ -588,6 +588,10 @@ jobs:
       - name: Prepare release notes
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            GH_TOKEN="${{ github.token }}"
+            export GH_TOKEN
+          fi
           NOTES_FILE="build/release-notes.md"
 
           BODY="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body --jq '.body // ""' 2>/dev/null || true)"
@@ -606,6 +610,10 @@ jobs:
       - name: Create or update release and upload assets
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            GH_TOKEN="${{ github.token }}"
+            export GH_TOKEN
+          fi
           ZIP_PATH="build/Voxt-${VERSION}-macOS.zip"
           PKG_PATH="build/Voxt-${VERSION}.pkg"
           SHA_PATH="build/Voxt-${VERSION}.pkg.sha256"
@@ -644,7 +652,7 @@ jobs:
   publish_to_voxt_api:
     name: Publish Package And Appcast To Voxt Service
     runs-on: ubuntu-latest
-    needs: [preflight, build_sign_notarize, publish_release]
+    needs: [preflight, build_sign_notarize]
     if: needs.preflight.outputs.should_skip != 'true' && needs.preflight.outputs.update_appcast == 'true'
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
@@ -713,18 +721,18 @@ jobs:
             exit 1
           fi
 
-          RELEASE_BODY="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body --jq '.body // ""')"
+          RELEASE_BODY="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body --jq '.body // ""' 2>/dev/null || true)"
           RELEASE_NOTES="$(printf '%s' "$RELEASE_BODY")"
           if [ -z "$RELEASE_NOTES" ]; then
             RELEASE_NOTES="Release ${VERSION}."
           fi
 
-          PUBLISHED_AT="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt // ""')"
+          PUBLISHED_AT="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt // ""' 2>/dev/null || true)"
           if [ -z "$PUBLISHED_AT" ]; then
             PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           fi
 
-          RELEASE_URL="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json url --jq '.url // ""')"
+          RELEASE_URL="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json url --jq '.url // ""' 2>/dev/null || true)"
           if [ -z "$RELEASE_URL" ]; then
             RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
           fi
