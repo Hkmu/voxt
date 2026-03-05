@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-03-05
+
+### Fixed
+- Fixed the About page log export action in menu-bar/dockless contexts by using a window-attached save sheet when possible and adding explicit export status feedback.
+
 ## [1.3.2] - 2026-03-05
 
 ### Fixed

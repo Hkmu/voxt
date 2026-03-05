@@ -154,24 +154,48 @@ struct AboutSettingsView: View {
             panel.allowedContentTypes = [.plainText]
             panel.nameFieldStringValue = generatedURL.lastPathComponent
             panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            logExportStatus = String(localized: "Preparing export…")
 
-            let response = panel.runModal()
-            guard response == .OK, let destinationURL = panel.url else {
-                logExportStatus = nil
-                refreshLogUpdateDate()
-                return
+            if let hostWindow = NSApp.keyWindow ?? NSApp.mainWindow {
+                panel.beginSheetModal(for: hostWindow) { response in
+                    handleExportPanelResult(
+                        response: response,
+                        destinationURL: panel.url,
+                        generatedURL: generatedURL
+                    )
+                }
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+                let response = panel.runModal()
+                handleExportPanelResult(
+                    response: response,
+                    destinationURL: panel.url,
+                    generatedURL: generatedURL
+                )
             }
+        } catch {
+            logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
+            refreshLogUpdateDate()
+        }
+    }
 
+    private func handleExportPanelResult(response: NSApplication.ModalResponse, destinationURL: URL?, generatedURL: URL) {
+        guard response == .OK, let destinationURL else {
+            logExportStatus = String(localized: "Export cancelled")
+            refreshLogUpdateDate()
+            return
+        }
+
+        do {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: generatedURL, to: destinationURL)
             logExportStatus = localizedFormat("Exported to %@", destinationURL.lastPathComponent)
-            refreshLogUpdateDate()
         } catch {
             logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
-            refreshLogUpdateDate()
         }
+        refreshLogUpdateDate()
     }
 
     private func localizedFormat(_ key: String, _ argument: String) -> String {
