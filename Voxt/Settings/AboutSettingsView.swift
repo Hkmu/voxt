@@ -8,7 +8,6 @@ struct AboutSettingsView: View {
 
     @State private var latestLogUpdateDate: Date?
     @State private var logExportStatus: String?
-    @State private var hostWindow: NSWindow?
 
     private var appVersionText: String? {
         let bundle = Bundle.main
@@ -149,11 +148,6 @@ struct AboutSettingsView: View {
         .onAppear {
             refreshLogUpdateDate()
         }
-        .background(
-            WindowAccessor { window in
-                hostWindow = window
-            }
-        )
     }
 
     private func refreshLogUpdateDate() {
@@ -163,50 +157,15 @@ struct AboutSettingsView: View {
     private func exportLatestLogs() {
         do {
             let generatedURL = try VoxtLog.exportLatestLogs(limit: 2000)
-            logExportStatus = String(localized: "Preparing export…")
+            let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
+            let destinationURL = downloadsURL.appendingPathComponent(generatedURL.lastPathComponent)
 
-            let panel = NSSavePanel()
-            panel.canCreateDirectories = true
-            panel.allowedContentTypes = [.plainText]
-            panel.nameFieldStringValue = generatedURL.lastPathComponent
-            panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-
-            NSApp.activate(ignoringOtherApps: true)
-            if let hostWindow, hostWindow.isVisible {
-                panel.beginSheetModal(for: hostWindow) { response in
-                    handleExportPanelResult(
-                        response: response,
-                        destinationURL: panel.url,
-                        generatedURL: generatedURL
-                    )
-                }
-            } else {
-                panel.begin { response in
-                    handleExportPanelResult(
-                        response: response,
-                        destinationURL: panel.url,
-                        generatedURL: generatedURL
-                    )
-                }
-            }
-        } catch {
-            logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
-            refreshLogUpdateDate()
-        }
-    }
-
-    private func handleExportPanelResult(response: NSApplication.ModalResponse, destinationURL: URL?, generatedURL: URL) {
-        guard response == .OK, let destinationURL else {
-            logExportStatus = String(localized: "Export cancelled")
-            refreshLogUpdateDate()
-            return
-        }
-
-        do {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: generatedURL, to: destinationURL)
+            NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
             logExportStatus = localizedFormat("Exported to %@", destinationURL.lastPathComponent)
         } catch {
             logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)

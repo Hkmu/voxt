@@ -1,5 +1,6 @@
 import Foundation
 import Sparkle
+import AppKit
 
 @MainActor
 final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
@@ -33,6 +34,9 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
 
     func checkForUpdates(source: CheckSource) {
         lastCheckSource = source
+        if source == .manual {
+            logInstallerServiceAvailability()
+        }
         switch source {
         case .manual:
             VoxtLog.info("Manual update check triggered via Sparkle.")
@@ -55,6 +59,7 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
             description=\(nsError.localizedDescription), userInfo=\(nsError.userInfo)
             """
         )
+        handleInstallerAuthorizationFailureIfNeeded(nsError)
     }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
@@ -142,6 +147,46 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
             }
         }
         return stableFeedURLString
+    }
+
+    private func handleInstallerAuthorizationFailureIfNeeded(_ error: NSError) {
+        let message = error.localizedDescription.lowercased()
+        let indicatesInstallerAuthFailure =
+            message.contains("authorization") ||
+            message.contains("installer") ||
+            message.contains("gain authorization required to update target")
+        guard indicatesInstallerAuthFailure else { return }
+
+        let manualDownloadURL = selectedFeedURLString
+            .replacingOccurrences(of: "/appcast.xml", with: "/")
+
+        guard let url = URL(string: manualDownloadURL) else { return }
+        VoxtLog.warning("Sparkle installer authorization failed. Opening manual download page: \(manualDownloadURL)")
+        NSWorkspace.shared.open(url)
+    }
+
+    private func logInstallerServiceAvailability() {
+        let appXPCServicesURL = Bundle.main.bundleURL.appendingPathComponent("Contents/XPCServices", isDirectory: true)
+        let frameworkXPCServicesURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices", isDirectory: true)
+        let fm = FileManager.default
+        let appEntries = (try? fm.contentsOfDirectory(atPath: appXPCServicesURL.path)) ?? []
+        let frameworkEntries = (try? fm.contentsOfDirectory(atPath: frameworkXPCServicesURL.path)) ?? []
+
+        let combinedEntries = appEntries + frameworkEntries
+        let installerEntries = combinedEntries.filter { $0.localizedCaseInsensitiveContains("Installer") }
+        if installerEntries.isEmpty {
+            VoxtLog.warning(
+                """
+                Sparkle installer check: installer services not found.
+                appXPCServices=\(appXPCServicesURL.path) entries=\(appEntries)
+                frameworkXPCServices=\(frameworkXPCServicesURL.path) entries=\(frameworkEntries)
+                """
+            )
+            return
+        }
+
+        VoxtLog.info("Sparkle installer check: found installer services \(installerEntries)")
     }
 }
 

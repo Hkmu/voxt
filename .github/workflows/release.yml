@@ -285,7 +285,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Sign app bundle with Developer ID
+      - name: Sign Sparkle and app bundle with Developer ID
         run: |
           set -euo pipefail
           APP_PATH="build/DerivedData/Build/Products/Release/Voxt.app"
@@ -294,16 +294,38 @@ jobs:
             exit 1
           fi
 
+          SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+          if [ ! -d "$SPARKLE_FRAMEWORK" ]; then
+            echo "::error::Sparkle.framework not found at $SPARKLE_FRAMEWORK"
+            exit 1
+          fi
+
+          # Sparkle sandboxed updater requires nested helpers/xpcs to be signed explicitly.
+          # Avoid --deep because it can sign nested code with wrong entitlements.
+          sign_if_exists() {
+            local target="$1"
+            if [ -e "$target" ]; then
+              echo "Signing: $target"
+              codesign --force --options runtime --timestamp --sign "$DEVELOPER_ID_APP_IDENTITY" "$target"
+            fi
+          }
+
+          sign_if_exists "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Installer.xpc"
+          sign_if_exists "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/InstallerLauncher.xpc"
+          sign_if_exists "$SPARKLE_FRAMEWORK/Versions/B/XPCServices/Downloader.xpc"
+          sign_if_exists "$SPARKLE_FRAMEWORK/Versions/B/Autoupdate"
+          sign_if_exists "$SPARKLE_FRAMEWORK/Versions/B/Updater.app"
+          sign_if_exists "$SPARKLE_FRAMEWORK"
+
           codesign \
             --force \
-            --deep \
             --options runtime \
             --timestamp \
             --entitlements Voxt/Voxt.entitlements \
             --sign "$DEVELOPER_ID_APP_IDENTITY" \
             "$APP_PATH"
 
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign --verify --strict --verbose=2 "$APP_PATH"
 
       - name: Build zip and pkg artifacts
         run: |
