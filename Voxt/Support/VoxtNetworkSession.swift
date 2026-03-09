@@ -8,7 +8,18 @@ enum VoxtNetworkSession {
         configuration.connectionProxyDictionary = [
             kCFNetworkProxiesHTTPEnable as String: false,
             kCFNetworkProxiesHTTPSEnable as String: false,
-            kCFNetworkProxiesSOCKSEnable as String: false
+            kCFNetworkProxiesSOCKSEnable as String: false,
+            kCFNetworkProxiesProxyAutoConfigEnable as String: false,
+            kCFNetworkProxiesProxyAutoDiscoveryEnable as String: false,
+            kCFNetworkProxiesHTTPProxy as String: "",
+            kCFNetworkProxiesHTTPPort as String: 0,
+            kCFNetworkProxiesHTTPSProxy as String: "",
+            kCFNetworkProxiesHTTPSPort as String: 0,
+            kCFNetworkProxiesSOCKSProxy as String: "",
+            kCFNetworkProxiesSOCKSPort as String: 0,
+            kCFNetworkProxiesProxyAutoConfigURLString as String: "",
+            kCFNetworkProxiesExceptionsList as String: [],
+            kCFNetworkProxiesExcludeSimpleHostnames as String: false
         ]
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: configuration)

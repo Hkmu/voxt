@@ -91,10 +91,11 @@ extension AppDelegate {
 
         // Safety fallback: some engine/device combinations may occasionally fail to
         // report completion. Ensure the session/UI can always recover.
+        let fallbackTimeoutSeconds = stopRecordingFallbackTimeoutSeconds()
         stopRecordingFallbackTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await Task.sleep(for: .seconds(8))
+                try await Task.sleep(for: .seconds(fallbackTimeoutSeconds))
             } catch {
                 return
             }
@@ -115,12 +116,21 @@ extension AppDelegate {
         stopRecordingFallbackTask = nil
 
         transcriptionResultReceivedAt = Date()
-        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = normalizedTranscriptionDisplayText(rawText)
         guard !text.isEmpty else {
             VoxtLog.info("Transcription result is empty; finishing session.")
             setEnhancingState(false)
             finishSession(after: 0)
             return
+        }
+
+        overlayState.transcribedText = text
+        if transcriptionEngine == .remote {
+            remoteASRTranscriber.transcribedText = text
+        } else if transcriptionEngine == .mlxAudio {
+            mlxTranscriber?.transcribedText = text
+        } else {
+            speechTranscriber.transcribedText = text
         }
 
         VoxtLog.info("Transcription result received. characters=\(text.count), output=\(sessionOutputMode == .translation ? "translation" : "transcription")")
@@ -309,6 +319,76 @@ extension AppDelegate {
         }
 
         return true
+    }
+
+    private func normalizedTranscriptionDisplayText(_ rawText: String) -> String {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        guard transcriptionEngine == .remote, remoteASRSelectedProvider == .openAIWhisper else {
+            return trimmed
+        }
+
+        guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
+              (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
+            return trimmed
+        }
+
+        guard let data = trimmed.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let extracted = extractTranscriptionTextValue(from: object),
+              !extracted.isEmpty else {
+            return trimmed
+        }
+        return extracted
+    }
+
+    private func stopRecordingFallbackTimeoutSeconds() -> TimeInterval {
+        guard transcriptionEngine == .remote else { return 8 }
+        switch remoteASRSelectedProvider {
+        case .openAIWhisper, .glmASR:
+            // File-upload ASR can legitimately take longer than realtime providers.
+            return 60
+        case .doubaoASR, .aliyunBailianASR:
+            return 8
+        }
+    }
+
+    private func extractTranscriptionTextValue(from object: Any) -> String? {
+        if let text = object as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        if let dict = object as? [String: Any] {
+            let preferredKeys = ["text", "transcript", "result_text", "utterance", "content", "data"]
+            for key in preferredKeys {
+                if let value = dict[key],
+                   let extracted = extractTranscriptionTextValue(from: value),
+                   !extracted.isEmpty {
+                    return extracted
+                }
+            }
+
+            for value in dict.values {
+                if let extracted = extractTranscriptionTextValue(from: value),
+                   !extracted.isEmpty {
+                    return extracted
+                }
+            }
+            return nil
+        }
+
+        if let array = object as? [Any] {
+            for item in array {
+                if let extracted = extractTranscriptionTextValue(from: item),
+                   !extracted.isEmpty {
+                    return extracted
+                }
+            }
+        }
+
+        return nil
     }
 
     private func applyPreferredInputDevice() {

@@ -3,6 +3,12 @@ import AppKit
 import ApplicationServices
 
 extension AppDelegate {
+    func resolveEnhancementPromptTemplate(_ prompt: String, rawTranscription: String) -> String {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else { return AppPreferenceKey.defaultEnhancementPrompt }
+        return trimmedPrompt.replacingOccurrences(of: "{{RAW_TRANSCRIPTION}}", with: rawTranscription)
+    }
+
     func resolvedGlobalEnhancementPrompt() -> String {
         let globalPrompt = UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt)?
             .trimmingCharacters(in: .whitespacesAndNewlines)

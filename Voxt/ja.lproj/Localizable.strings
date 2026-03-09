@@ -210,6 +210,15 @@
 "Download Update" = "更新をダウンロード";
 "Download progress: %.0f%%" = "ダウンロード進捗: %.0f%%";
 "Permissions Disabled" = "権限が未許可";
+"Chunk Pseudo Realtime Preview" = "Chunk 疑似リアルタイムプレビュー";
+"Enable segmented OpenAI ASR preview during recording. This roughly doubles usage." = "有効にすると録音中に OpenAI ASR を分割呼び出ししてプレビューします。消費量はおおよそ 2 倍になります。";
+"New Version Available" = "新しいバージョンがあります";
+"Update Information" = "更新情報";
+"Check Again" = "再確認";
+"Unable to check for updates.\n\n%@" = "更新を確認できませんでした。\n\n%@";
+"A new version of Voxt is available:\n%@" = "Voxt の新しいバージョンがあります:\n%@";
+"No update information is currently available." = "現在、更新情報はありません。";
+"Installer service is unavailable." = "更新インストーラーサービスを利用できません。";
 "Please enable required permissions in Settings > Permissions." = "設定 > 権限で必要な権限を有効にしてください。";
 "Microphone permission is required. Enable it in Settings > Permissions." = "マイク権限が必要です。設定 > 権限で有効にしてください。";
 "Speech Recognition permission is required for Direct Dictation. Enable it in Settings > Permissions." = "Direct Dictation には音声認識権限が必要です。設定 > 権限で有効にしてください。";
@@ -361,3 +370,7 @@
 "Kimi" = "Kimi";
 "LM Studio" = "LM Studio";
 "MiniMax" = "MiniMax";
+
+"Supported variable: {{RAW_TRANSCRIPTION}}" = "サポート変数: {{RAW_TRANSCRIPTION}}";
+
+"Supported variables: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}" = "サポート変数: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}";

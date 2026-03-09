@@ -19,6 +19,7 @@ extension AppDelegate {
         switch enhancementMode {
         case .off:
             setEnhancingState(false)
+            overlayState.transcribedText = text
             commitTranscription(text, llmDurationSeconds: nil)
             finishSession()
 
@@ -30,6 +31,7 @@ extension AppDelegate {
                     clearAfter: 2.5
                 )
                 setEnhancingState(false)
+                overlayState.transcribedText = text
                 commitTranscription(text, llmDurationSeconds: nil)
                 finishSession()
                 return
@@ -46,7 +48,6 @@ extension AppDelegate {
         Task {
             defer {
                 self.setEnhancingState(false)
-                self.finishSession()
             }
 
             let llmStartedAt = Date()
@@ -60,10 +61,14 @@ extension AppDelegate {
                 let enhanced = try await self.runStandardTranscriptionPipeline(text: text)
                 let llmDuration = Date().timeIntervalSince(llmStartedAt)
                 VoxtLog.info("Enhancement completed. mode=\(self.enhancementMode.rawValue), inputChars=\(text.count), outputChars=\(enhanced.count), llmDurationSec=\(String(format: "%.3f", llmDuration))")
+                self.overlayState.transcribedText = enhanced
                 self.commitTranscription(enhanced, llmDurationSeconds: llmDuration)
+                self.finishSession(after: 1.5)
             } catch {
                 VoxtLog.warning("Standard transcription pipeline enhancement failed, using raw text: \(error)")
+                self.overlayState.transcribedText = text
                 self.commitTranscription(text, llmDurationSeconds: nil)
+                self.finishSession(after: 1.5)
             }
         }
     }
@@ -82,7 +87,8 @@ extension AppDelegate {
     }
 
     func enhanceTextForCurrentMode(_ text: String) async throws -> String {
-        let prompt = resolvedEnhancementPrompt()
+        let promptTemplate = resolvedEnhancementPrompt()
+        let prompt = resolveEnhancementPromptTemplate(promptTemplate, rawTranscription: text)
 
         switch enhancementMode {
         case .off:

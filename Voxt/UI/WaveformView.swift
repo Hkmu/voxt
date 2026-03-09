@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct WaveformView: View {
     var audioLevel: Float
@@ -20,10 +21,91 @@ struct WaveformView: View {
     private var displayText: String {
         let message = statusMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         if !message.isEmpty { return message }
-        return transcribedText
+        return sanitizedDisplayText(transcribedText)
     }
 
     private var hasText: Bool { !displayText.isEmpty }
+
+    private func sanitizedDisplayText(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        if !(trimmed.hasPrefix("{") || trimmed.hasPrefix("[")) {
+            return trimmed
+        }
+
+        if let data = trimmed.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data),
+           let text = extractText(from: object),
+           !text.isEmpty {
+            return text
+        }
+
+        if let text = extractLooseText(from: trimmed), !text.isEmpty {
+            return text
+        }
+
+        // Never hide transcription text completely when JSON-like parsing fails.
+        // Falling back to raw text keeps the overlay informative.
+        return trimmed
+    }
+
+    private func extractText(from object: Any) -> String? {
+        if let value = object as? String {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let dict = object as? [String: Any] {
+            for key in ["text", "transcript", "delta", "result_text", "content"] {
+                if let value = dict[key], let extracted = extractText(from: value), !extracted.isEmpty {
+                    return extracted
+                }
+            }
+            for value in dict.values {
+                if let extracted = extractText(from: value), !extracted.isEmpty {
+                    return extracted
+                }
+            }
+        }
+        if let array = object as? [Any] {
+            for value in array {
+                if let extracted = extractText(from: value), !extracted.isEmpty {
+                    return extracted
+                }
+            }
+        }
+        return nil
+    }
+
+    private func extractLooseText(from value: String) -> String? {
+        let patterns = [
+            #"(?:["']?text["']?\s*:\s*["'])([^"']+)(?:["'])"#,
+            #"(?:["']?transcript["']?\s*:\s*["'])([^"']+)(?:["'])"#,
+            #"(?:["']?delta["']?\s*:\s*["'])([^"']+)(?:["'])"#,
+            #"(?:["']?text["']?\s*:\s*)([^,}\]]+)"#,
+            #"(?:["']?transcript["']?\s*:\s*)([^,}\]]+)"#,
+            #"(?:["']?delta["']?\s*:\s*)([^,}\]]+)"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let range = NSRange(value.startIndex..<value.endIndex, in: value)
+            guard let match = regex.firstMatch(in: value, options: [], range: range),
+                  match.numberOfRanges > 1,
+                  let textRange = Range(match.range(at: 1), in: value) else {
+                continue
+            }
+            var result = String(value[textRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if (result.hasPrefix("\"") && result.hasSuffix("\"")) ||
+                (result.hasPrefix("'") && result.hasSuffix("'")) {
+                result.removeFirst()
+                result.removeLast()
+                result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if !result.isEmpty { return result }
+        }
+        return nil
+    }
 
     /// Keep expanded layout while text exists to avoid UI jumps during LLM processing.
     private var isCompact: Bool { !hasText }
@@ -137,12 +219,19 @@ struct WaveformView: View {
         HStack(alignment: .center, spacing: 2.5) {
             ForEach(0..<barCount, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(.white)
-                    .frame(width: 2.5, height: barHeight(for: index))
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.98), Color.white.opacity(0.80)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 3.2, height: barHeight(for: index))
+                    .shadow(color: .white.opacity(glowOpacity(for: index)), radius: 3, x: 0, y: 0)
                     .animation(.easeInOut(duration: 0.1), value: audioLevel)
             }
         }
-        .frame(height: 24)
+        .frame(height: 28)
     }
 
     // MARK: - Processing bars (enhancing state)
@@ -176,18 +265,33 @@ struct WaveformView: View {
     // MARK: - Bar helpers
 
     private func barHeight(for index: Int) -> CGFloat {
-        let level = CGFloat(audioLevel)
+        let level = normalizedAudioLevel(audioLevel)
         let phase = phases[index]
         let sine = (sin(phase) + 1) / 2
-        let minH: CGFloat = 3
-        let maxH: CGFloat = 22
+        let minH: CGFloat = 4
+        let maxH: CGFloat = 26
 
         if isRecording {
-            let driven = minH + (maxH - minH) * level * CGFloat(sine * 0.7 + 0.3)
+            let driven = minH + (maxH - minH) * level * CGFloat(sine * 0.72 + 0.28)
             return max(minH, driven)
         } else {
-            return minH + (maxH * 0.15) * CGFloat(sine)
+            return minH + (maxH * 0.18) * CGFloat(sine)
         }
+    }
+
+    private func glowOpacity(for index: Int) -> Double {
+        guard isRecording else { return 0.08 }
+        let level = Double(normalizedAudioLevel(audioLevel))
+        let phase = phases[index]
+        let sine = (sin(phase * 1.15) + 1) / 2
+        return min(0.35, 0.08 + level * 0.27 * sine)
+    }
+
+    private func normalizedAudioLevel(_ raw: Float) -> CGFloat {
+        let clamped = max(0, min(raw, 1))
+        // Visual gain curve: make low/mid volumes much more visible.
+        let gained = min(1.0, pow(Double(clamped), 0.62) * 1.55)
+        return CGFloat(gained)
     }
 
     /// Gentle wave pattern for processing bars — subtle, low variance

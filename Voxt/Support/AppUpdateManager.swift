@@ -1,16 +1,18 @@
 import Foundation
 import Sparkle
 import AppKit
+import Combine
 
 @MainActor
-final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
+final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
     enum CheckSource {
         case automatic
         case manual
     }
 
-    private lazy var updaterController: SPUStandardUpdaterController = {
-        SPUStandardUpdaterController(
+    private lazy var updaterController: SPUStandardUpdaterController? = {
+        guard sparkleIsAvailable else { return nil }
+        return SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: self,
             userDriverDelegate: self
@@ -21,36 +23,58 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     private let betaFeedURLString = "https://voxt.actnow.dev/updates/beta/appcast.xml"
     private let betaFeedEnableEnvKey = "VOXT_ENABLE_BETA_UPDATES"
     private var lastCheckSource: CheckSource = .automatic
-    private(set) var hasUpdate = false
-    private(set) var latestVersion: String?
+    @Published private(set) var hasUpdate = false
+    @Published private(set) var latestVersion: String?
+    @Published private(set) var updateCheckIssueMessage: String?
     private var latestDownloadedUpdateURL: URL?
+    private lazy var sparkleIsAvailable: Bool = {
+        let bundle = Bundle.main
+        let shortVersion = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let buildVersion = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let available = !shortVersion.isEmpty && !buildVersion.isEmpty
+        if !available {
+            VoxtLog.warning("Sparkle disabled: bundle version metadata is missing. short=\(shortVersion), build=\(buildVersion)")
+        }
+        return available
+    }()
 
     // Background/dockless apps should opt into Sparkle's gentle reminder support
     // to avoid missing scheduled update alerts.
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
     var automaticallyChecksForUpdates: Bool {
-        get { updaterController.updater.automaticallyChecksForUpdates }
-        set { updaterController.updater.automaticallyChecksForUpdates = newValue }
+        get { updaterController?.updater.automaticallyChecksForUpdates ?? false }
+        set {
+            guard let updaterController else { return }
+            updaterController.updater.automaticallyChecksForUpdates = newValue
+        }
     }
 
     func checkForUpdates(source: CheckSource) {
         lastCheckSource = source
+        reportIssue(nil)
+        guard sparkleIsAvailable, let updaterController else {
+            reportIssue(AppLocalization.localizedString("Installer service is unavailable."))
+            return
+        }
         if source == .manual {
             if !isInstallerServiceAvailable() {
                 VoxtLog.error("Sparkle installer services unavailable. Opening manual update page instead of Sparkle installer flow.")
-                openManualUpdatePage()
+                reportIssue(AppLocalization.localizedString("Installer service is unavailable."))
                 return
             }
             logInstallerServiceAvailability()
         }
         switch source {
         case .manual:
-            VoxtLog.info("Manual update check triggered via Sparkle.")
-            updaterController.checkForUpdates(nil)
+            VoxtLog.info("Manual update check triggered via Sparkle background mode.")
+            updaterController.updater.checkForUpdatesInBackground()
         case .automatic:
             if !isInstallerServiceAvailable() {
                 VoxtLog.warning("Sparkle installer services unavailable. Skipping background update cycle.")
+                reportIssue(AppLocalization.localizedString("Installer service is unavailable."))
                 return
             }
             VoxtLog.info("Background update check triggered via Sparkle.")
@@ -79,14 +103,17 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
             userInfo=\(nsError.userInfo)
             """
         )
+        reportIssue(nsError.localizedDescription)
         handleInstallerFailureIfNeeded(nsError)
     }
 
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
-        hasUpdate = true
-        latestVersion = "\(item.displayVersionString) (\(item.versionString))"
-        latestDownloadedUpdateURL = item.fileURL
-        NotificationCenter.default.post(name: .voxtUpdateAvailabilityDidChange, object: nil)
+        setUpdateState(
+            hasUpdate: true,
+            latestVersion: "\(item.displayVersionString) (\(item.versionString))",
+            issue: nil,
+            downloadedURL: item.fileURL
+        )
         VoxtLog.info(
             """
             Sparkle found update. source=\(lastCheckSource.description), \
@@ -97,10 +124,7 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     }
 
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: any Error) {
-        hasUpdate = false
-        latestVersion = nil
-        latestDownloadedUpdateURL = nil
-        NotificationCenter.default.post(name: .voxtUpdateAvailabilityDidChange, object: nil)
+        setUpdateState(hasUpdate: false, latestVersion: nil, issue: nil, downloadedURL: nil)
         let nsError = error as NSError
         VoxtLog.info(
             """
@@ -134,6 +158,7 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
         if let error {
             let nsError = error as NSError
+            reportIssue(nsError.localizedDescription)
             VoxtLog.warning(
                 """
                 Sparkle finished update cycle with error. source=\(lastCheckSource.description), \
@@ -142,6 +167,7 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
                 """
             )
         } else {
+            reportIssue(nil)
             VoxtLog.info(
                 "Sparkle finished update cycle successfully. source=\(lastCheckSource.description), check=\(String(describing: updateCheck))"
             )
@@ -239,11 +265,26 @@ final class AppUpdateManager: NSObject, SPUStandardUserDriverDelegate, SPUUpdate
         return true
     }
 
-    private func openManualUpdatePage() {
-        let manualUpdateURLString = "https://github.com/hehehai/voxt/releases/latest"
-        if let url = URL(string: manualUpdateURLString) {
-            NSWorkspace.shared.open(url)
-        }
+    private func reportIssue(_ message: String?) {
+        setUpdateState(
+            hasUpdate: hasUpdate,
+            latestVersion: latestVersion,
+            issue: message,
+            downloadedURL: latestDownloadedUpdateURL
+        )
+    }
+
+    private func setUpdateState(
+        hasUpdate: Bool,
+        latestVersion: String?,
+        issue: String?,
+        downloadedURL: URL?
+    ) {
+        self.hasUpdate = hasUpdate
+        self.latestVersion = latestVersion
+        self.updateCheckIssueMessage = issue
+        self.latestDownloadedUpdateURL = downloadedURL
+        NotificationCenter.default.post(name: .voxtUpdateAvailabilityDidChange, object: nil)
     }
 }
 

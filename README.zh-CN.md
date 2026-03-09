@@ -5,7 +5,7 @@
 <h1 align="center">Voxt</h1>
 
 <p align="center">
-  菜单栏语音输入与翻译工具：按住说话，松开即贴；也可走翻译链路后再贴。
+  macOS 菜单栏语音输入与翻译工具。按住说话，松开即贴。
 </p>
 
 <p align="center">
@@ -14,179 +14,117 @@
     <img alt="Release" src="https://img.shields.io/github/v/release/hehehai/voxt?label=release&color=brightgreen">
   </a>
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
-  <img alt="STT" src="https://img.shields.io/badge/STT-MLX%20Audio%20%7C%20Apple%20Speech-blue">
-  <img alt="LLM" src="https://img.shields.io/badge/LLM-Apple%20Intelligence%20%7C%20Custom%20LLM-8A2BE2">
-  <img alt="Type" src="https://img.shields.io/badge/App-Menu%20Bar-444">
 </p>
+
 <p align="center">
   <a href="README.md">English</a>
 </p>
 
-## Video
+## 下载
 
-https://github.com/user-attachments/assets/23d42c24-7128-4bdb-bc1d-98509e69d97e
+- 最新版本：https://github.com/hehehai/voxt/releases/latest
 
-[Release](https://github.com/hehehai/voxt/releases/latest)
+## 核心功能
 
-## Features
-
-- 全局快捷键语音输入，不切应用直接转写并粘贴。
-- 双快捷键动作：
+- 全局快捷键语音输入，不切换应用即可转写并粘贴。
+- 两类快捷键动作：
   - `Transcription`（普通转写）
   - `Translation`（转写后翻译）
-- 双触发模式：`Long Press (Release to End)` / `Tap (Press to Toggle)`。
-- 快捷键操作语义：
-  - 长按：
-    - 按住转写快捷键（`fn`）开始转写，松开 `fn` 结束。
-    - 按住翻译快捷键（`fn+shift`）开始翻译模式，松开 `fn+shift` 结束。
-  - 点按：
-    - 点按转写快捷键（`fn`）开始，再次点按 `fn` 结束。
-    - 点按翻译快捷键（`fn+shift`）开始翻译模式。
-- 选中文本直译（新增）：
-  - 开启后，在有选中文本时按翻译快捷键（`fn+shift`），会直接翻译并替换选中内容。
-  - 点按与长按两种快捷键风格都支持该行为。
-  - 若模型首轮返回“未翻译”结果，Voxt 会自动使用更严格约束重试一次。
-- 单会话保护：同一时刻只允许一个会话运行，不支持会话中途切换模式。
-- 双语音引擎：
-  - `MLX Audio (On-device)`：本地模型转写
-  - `Direct Dictation`：Apple Speech 实时听写
-- 双 LLM 路径：
-  - `Apple Intelligence (Foundation Models)`
-  - `Custom LLM`（本地模型）
-- 支持翻译目标语言选择：English / Chinese (Simplified) / Japanese / Korean / Spanish / French / German。
-- 实时悬浮条：音量波形、滚动文本、处理中动画、完成状态反馈。
-- 智能输出策略：可选“无可编辑输入框时仅复制到剪贴板”。
-- 剪贴板保护：自动粘贴后恢复原剪贴板内容。
-- 本地历史记录：分页、复制、删除、清空，区分 `Normal / Translation`。
-- App Branch 应用增强分组：支持 App 与 URL 规则拖拽分组配置。
-- 浏览器活动标签页 URL 匹配（Chrome / Safari / Arc），按浏览器单独进行自动化授权。
-- 模型下载管理：进度、取消、删除、体积展示、校验、`hf-mirror.com` 镜像切换。
-- 系统级能力：麦克风选择、交互提示音、开机启动、Dock 显示开关。
+- 两种触发方式：
+  - `Long Press (Release to End)`
+  - `Tap (Press to Toggle)`
+- 选中文本直译：
+  - 在有选中文本时按翻译快捷键，直接翻译并替换选区。
+- 单会话保护：
+  - 同时只允许一个录制会话。
+- 悬浮转录 UI：
+  - 波形、预览文本、处理中状态、最终结果。
+- 剪贴板保护自动粘贴：
+  - 粘贴后恢复原剪贴板。
+- 本地历史记录：
+  - 支持复制、删除、清空，区分转写/翻译模式。
 
-## 实现方式
+## 语音识别引擎（ASR）
 
-1. `CGEvent tap` 监听全局快捷键（转写与翻译分离）。
-2. `AVAudioEngine` 采集音频并实时更新音量。
-3. 根据配置选择 STT 引擎：
-   - MLX：分阶段纠正（中间修正 + 停止后最终修正）
-   - Dictation：`SFSpeechRecognizer` 流式结果
-4. 根据模式执行文本处理：
-   - 普通模式：
-     - ASR -> 可选增强（Off / Apple Intelligence / Custom LLM）
-     - 增强提示词可走 App Branch（App/URL 命中）或全局回退。
-   - 翻译模式：
-     - ASR -> 增强 -> 翻译（两次 LLM 调用）
-     - 增强阶段仍使用 App Branch 增强路由。
-     - 翻译阶段使用独立翻译提示词，并约束只输出结果文本。
-   - 启用“翻译快捷键直译选中”时：
-     - 先获取系统选中文本（优先 AX，失败回退到复制读取）-> 直接翻译 -> 替换选中内容。
-     - 悬浮转录 UI 仍会显示，并同步选中/翻译结果文本。
-5. 通过粘贴板 + `Cmd+V` 注入文本，并记录历史与耗时。
+### 本地引擎
 
-## 设置说明
+- `MLX Audio (On-device)`：本地模型。
+- `Direct Dictation`：Apple `SFSpeechRecognizer`。
 
-- `General -> Output -> Translate selected text with translation shortcut` 用于控制“翻译快捷键直译选中”的开关。
+### 远程 ASR（OpenAI 兼容 + 厂商接口）
 
-## 引擎介绍
+在 **Model Settings -> Remote ASR Providers** 中可配置：
 
-### 语音识别（STT）引擎
+- OpenAI Whisper / Transcribe 风格接口
+- Doubao ASR
+- GLM ASR
+- 阿里云百炼 ASR（实时 WebSocket）
 
-| 引擎 | 说明 | 优势 | 适用场景 |
-| --- | --- | --- | --- |
-| MLX Audio | 本地加载 MLX STT 模型进行识别 | 离线、本地可控、模型可选 | 追求隐私和可调模型 |
-| Direct Dictation | Apple Speech (`SFSpeechRecognizer`) | 零配置、开箱即用 | 不想下载模型、快速上手 |
+说明：
 
-### 增强 / 翻译引擎
+- 阿里云百炼 ASR 在 Voxt 中以实时 WS 为主，请保证模型与 endpoint 匹配。
+- OpenAI ASR 支持可选开关 **Chunk Pseudo Realtime Preview**：
+  - 入口：OpenAI ASR 配置弹窗
+  - 默认：`关闭`
+  - 作用：通过分段请求实现“伪实时预览”
+  - 成本：大约双倍消耗
 
-| 引擎 | 技术路径 | 优势 | 注意点 |
-| --- | --- | --- | --- |
-| Apple Intelligence | `FoundationModels` | 系统级体验、无需额外下载 LLM | 依赖系统可用性 |
-| Custom LLM | 本地 `MLXLMCommon` + Hugging Face 模型 | 完全本地、可自定义提示词 | 需要先下载模型 |
+## 文本增强与翻译
 
-## 模型介绍
+增强模式支持：
 
-### MLX STT 模型
+- `Off`
+- `Apple Intelligence (FoundationModels)`
+- `Custom LLM`（本地）
+- `Remote LLM`
 
-- `mlx-community/Qwen3-ASR-0.6B-4bit`（默认）：均衡速度与质量，内存占用较低。
-- `mlx-community/Qwen3-ASR-1.7B-bf16`：准确率优先，资源占用更高。
-- `mlx-community/Voxtral-Mini-4B-Realtime-2602-fp16`：实时导向，模型体积较大。
-- `mlx-community/parakeet-tdt-0.6b-v3`：轻量快速，英文场景友好。
-- `mlx-community/GLM-ASR-Nano-2512-4bit`：最小占用，适合快速草稿。
+远程 LLM 在 **Model Settings -> Remote LLM Providers** 里配置。
+翻译可选择走本地 Custom LLM 或远程 LLM。
 
-### Custom LLM 模型
+## 更新行为
 
-- `Qwen/Qwen2-1.5B-Instruct`（默认）：通用增强/翻译，资源压力更低。
-- `Qwen/Qwen2.5-3B-Instruct`：更强格式与推理能力，速度和占用更高。
-- `mlx-community/Qwen3-4B-4bit`：Qwen3 质量与速度均衡。
-- `mlx-community/Qwen3-8B-4bit`：更高质量 Qwen3 选项。
-- `mlx-community/GLM-4-9B-0414-4bit`：多语言指令跟随能力更强。
-- `mlx-community/Llama-3.2-3B-Instruct-4bit`：轻量 Llama 本地增强方案。
-- `mlx-community/Llama-3.2-1B-Instruct-4bit`：最小占用 Llama 方案。
-- `mlx-community/Meta-Llama-3-8B-Instruct-4bit`：通用 8B Llama。
-- `mlx-community/Meta-Llama-3.1-8B-Instruct-4bit`：更稳的 8B Llama 3.1。
-- `mlx-community/Mistral-7B-Instruct-v0.3-4bit`：简洁指令输出表现稳定。
-- `mlx-community/Mistral-Nemo-Instruct-2407-4bit`：Nemo 架构指令能力更强。
-- `mlx-community/gemma-2-2b-it-4bit`：轻量 Gemma 2 指令模型。
-- `mlx-community/gemma-2-9b-it-4bit`：大参数 Gemma 2，质量更高。
+Voxt 使用 Sparkle 进行更新检查。
 
-## 模型效果对比（相对）
+- 检测到新版本：
+  - 设置窗口左侧底部显示更新 badge。
+- 检查更新失败：
+  - 默认不弹阻断式失败弹窗。
+  - 在设置左侧显示失败 badge。
+  - 点击 badge 可查看详情并重试。
 
-> 说明：下表是基于项目内置模型定位与常见体感给出的相对建议，不是统一硬件上的基准跑分。
+这样可以保证失败可见，同时不影响日常使用。
 
-### STT 模型效果对比
+## 网络与代理
 
-| 模型 | 速度 | 准确性 | 资源占用 | 推荐场景 |
-| --- | --- | --- | --- | --- |
-| Qwen3-ASR 0.6B (4bit) | 中-高 | 中-高 | 低 | 日常主力 |
-| Qwen3-ASR 1.7B (bf16) | 中 | 高 | 高 | 质量优先 |
-| Voxtral Realtime Mini 4B (fp16) | 高 | 中-高 | 高 | 实时反馈优先 |
-| Parakeet 0.6B | 高 | 中 | 低 | 英文快速输入 |
-| GLM-ASR Nano (4bit) | 高 | 中-低 | 很低 | 低资源设备/草稿 |
+- 网络请求可按直连策略运行。
+- 日志会记录系统代理探测结果，便于排查。
+- 若遇到 403 / 握手失败，请优先核对：
+  - endpoint 是否正确
+  - Key 与地域是否匹配
+  - 本机代理/VPN/网络路径是否干扰
 
-### LLM 模型效果对比
+## 权限
 
-| 模型 | 生成质量 | 速度 | 资源占用 | 推荐场景 |
-| --- | --- | --- | --- | --- |
-| Qwen2 1.5B Instruct | 中-高 | 高 | 低-中 | 常规润色与翻译 |
-| Qwen2.5 3B Instruct | 高 | 中 | 中-高 | 质量和格式一致性优先 |
-| Qwen3 4B (4bit) | 高 | 中 | 中 | 日常本地增强与翻译 |
-| Qwen3 8B (4bit) | 很高 | 中-低 | 高 | 质量优先本地生成 |
-| Llama 3.2 1B (4bit) | 中 | 很高 | 低 | 轻量设备与快速响应 |
-| Mistral 7B v0.3 (4bit) | 高 | 中 | 中-高 | 简洁稳定输出 |
+Voxt 可能需要以下权限：
 
-## 安装与构建
+- 麦克风
+- 辅助功能
+- 输入监控
+- 语音识别（Dictation 模式）
+- 自动化（浏览器标签匹配，可选）
 
-### 系统要求
-
-- macOS `26.0+`
-- 麦克风权限
-- 辅助功能权限（全局热键与自动粘贴）
-- `Direct Dictation` 模式需要语音识别权限
-
-### 安装（给朋友分发）
-
-- 可直接下载 Release：
-  - 最新版本页面：https://github.com/hehehai/voxt/releases/latest
-- 安装步骤：
-  1. 下载并解压 `zip`。
-  2. 将 `Voxt.app` 拖到 `Applications`。
-  3. 首次启动按提示授予所需权限。
-  4. 若被 Gatekeeper 拦截，右键 `Voxt.app` -> `打开`。
-
-### 本地构建
-
-1. 使用 Xcode 打开 `Voxt.xcodeproj` 并运行。
-2. 或终端构建：
+## 构建
 
 ```bash
 xcodebuild -project Voxt.xcodeproj -scheme Voxt -destination 'platform=macOS' build
 ```
 
-## Thanks
+## 架构说明
 
-- [mlx-audio-swift](https://github.com/Blaizzy/mlx-audio-swift)
-- [Kaze](https://github.com/fayazara/Kaze)
-- Apple `Speech` / `FoundationModels` / AppKit / SwiftUI
+- `AppDelegate+*`：按会话阶段拆分（录制、转写、翻译、收尾）。
+- `Support/`：更新、网络、模型配置、历史、增强等服务层。
+- `Transcription/`：本地与远程转录实现。
+- `Settings/`：模块化设置页与 provider 配置 UI。
 
 ## 协议
 

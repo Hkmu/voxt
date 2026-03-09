@@ -33,7 +33,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     private var recorder: AVAudioRecorder?
     private let audioEngine = AVAudioEngine()
     private var doubaoStreamingContext: DoubaoStreamingContext?
+    private var aliyunStreamingContext: AliyunFunStreamingContext?
+    private var aliyunQwenStreamingContext: AliyunQwenStreamingContext?
     private var meterTimer: Timer?
+    private var openAIPreviewTask: Task<Void, Never>?
+    private var openAIPreviewInFlight = false
+    private var openAIPreviewLastText = ""
     private var recordingFileURL: URL?
     private var transcribeTask: Task<Void, Never>?
     private var activeProvider: RemoteASRProvider?
@@ -48,6 +53,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         guard !isRecording else { return }
         cleanupActiveUploadTask()
         cleanupDoubaoStreamingState()
+        cleanupAliyunStreamingState()
         transcribedText = ""
         audioLevel = 0
         let provider = selectedProvider
@@ -66,8 +72,27 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             return
         }
 
+        if provider == .aliyunBailianASR {
+            do {
+                if isAliyunQwenRealtimeModel(configuration.model) {
+                    try startAliyunQwenRealtimeStreaming(configuration: configuration)
+                } else {
+                    try startAliyunFunStreaming(configuration: configuration)
+                }
+            } catch {
+                VoxtLog.error("Aliyun realtime streaming setup failed: \(error.localizedDescription)")
+                cleanupRecorderState()
+                cleanupAliyunStreamingState()
+                activeProvider = nil
+            }
+            return
+        }
+
         do {
             try startFileRecordingMode()
+            if provider == .openAIWhisper, configuration.openAIChunkPseudoRealtimeEnabled {
+                startOpenAIPreviewLoop(configuration: configuration)
+            }
         } catch {
             VoxtLog.error("Remote ASR recorder setup failed: \(error.localizedDescription)")
             cleanupRecorderState()
@@ -129,9 +154,77 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             return
         }
 
+        if activeProvider == .aliyunBailianASR, let context = aliyunStreamingContext {
+            isRecording = false
+            stopAliyunAudioCapture()
+            if !context.isClosed {
+                sendAliyunFunControl(action: "finish-task", through: context.ws, taskID: context.taskID) { error in
+                    Task { [responseState = context.responseState] in
+                        if let error {
+                            await responseState.markCompletedWithError(error)
+                        } else {
+                            await responseState.markFinishRequested()
+                        }
+                    }
+                }
+            }
+
+            transcribeTask = Task { [weak self] in
+                guard let self else { return }
+                let finalText: String
+                do {
+                    finalText = try await context.responseState.waitForFinalResult(timeoutSeconds: streamingFinalWaitTimeout)
+                } catch {
+                    VoxtLog.warning("Aliyun fun final result wait failed: \(error.localizedDescription)")
+                    finalText = await context.responseState.currentText()
+                }
+                await MainActor.run {
+                    self.transcribedText = finalText
+                    self.finish(with: finalText)
+                }
+            }
+            return
+        }
+
+        if activeProvider == .aliyunBailianASR, let context = aliyunQwenStreamingContext {
+            isRecording = false
+            stopAliyunAudioCapture()
+            if !context.isClosed {
+                sendAliyunQwenEvent(
+                    type: "session.finish",
+                    through: context.ws
+                ) { error in
+                    Task { [responseState = context.responseState] in
+                        if let error {
+                            await responseState.markCompletedWithError(error)
+                        } else {
+                            await responseState.markFinishRequested()
+                        }
+                    }
+                }
+            }
+
+            transcribeTask = Task { [weak self] in
+                guard let self else { return }
+                let finalText: String
+                do {
+                    finalText = try await context.responseState.waitForFinalResult(timeoutSeconds: streamingFinalWaitTimeout)
+                } catch {
+                    VoxtLog.warning("Aliyun qwen realtime final result wait failed: \(error.localizedDescription)")
+                    finalText = await context.responseState.currentText()
+                }
+                await MainActor.run {
+                    self.transcribedText = finalText
+                    self.finish(with: finalText)
+                }
+            }
+            return
+        }
+
         recorder?.stop()
         isRecording = false
         stopMeteringTimer()
+        stopOpenAIPreviewLoop()
 
         guard let fileURL = recordingFileURL else {
             finish(with: transcribedText)
@@ -211,12 +304,68 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         guard !token.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -1, userInfo: [NSLocalizedDescriptionKey: "OpenAI API key is empty."])
         }
-        return try await transcribeViaMultipartStream(
+        return try await transcribeOpenAIJSON(
             endpoint: endpoint,
             authorizationValue: "Bearer \(token)",
             fileURL: fileURL,
-            model: configuration.model,
-            extraFields: ["stream": "true"]
+            model: configuration.model
+        )
+    }
+
+    private func transcribeOpenAIJSON(
+        endpoint: URL,
+        authorizationValue: String,
+        fileURL: URL,
+        model: String
+    ) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let effectiveModel = model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "whisper-1" : model
+        let body = try makeMultipartBody(
+            fileURL: fileURL,
+            boundary: boundary,
+            model: effectiveModel,
+            extraFields: [
+                "response_format": "json",
+                "stream": "false"
+            ]
+        )
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json, text/plain", forHTTPHeaderField: "Accept")
+        request.setValue(authorizationValue, forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+
+        let (data, response) = try await VoxtNetworkSession.active.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -10, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response."])
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let payload = String(data: data.prefix(500), encoding: .utf8) ?? ""
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(payload)"]
+            )
+        }
+
+        if let object = try? JSONSerialization.jsonObject(with: data),
+           let text = extractText(in: object),
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let plainText = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !plainText.isEmpty, !isLikelyJSONObjectString(plainText) {
+            return plainText
+        }
+
+        throw NSError(
+            domain: "Voxt.RemoteASR",
+            code: -11,
+            userInfo: [NSLocalizedDescriptionKey: "OpenAI transcription response did not contain text."]
         )
     }
 
@@ -256,13 +405,22 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     }
 
     private func transcribeAliyunBailian(fileURL: URL, configuration: RemoteProviderConfiguration) async throws -> String {
-        let endpoint = URL(string: normalizedEndpoint(configuration.endpoint, defaultValue: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"))!
+        let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? RemoteASRProvider.aliyunBailianASR.suggestedModel
+            : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isAliyunFunRealtimeModel(model) || isAliyunQwenRealtimeModel(model) else {
+            throw NSError(
+                domain: "Voxt.RemoteASR",
+                code: -33,
+                userInfo: [NSLocalizedDescriptionKey: "Aliyun ASR in Voxt supports realtime WebSocket models only. Please select a Qwen/Fun/Paraformer realtime model."]
+            )
+        }
+
         let token = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else {
             throw NSError(domain: "Voxt.RemoteASR", code: -30, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian API key is empty."])
         }
-
-        let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RemoteASRProvider.aliyunBailianASR.suggestedModel : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = URL(string: resolvedAliyunRealtimeEndpoint(configuration.endpoint))!
         let fileData = try Data(contentsOf: fileURL)
         let dataURI = "data:\(audioMIMEType(for: fileURL));base64,\(fileData.base64EncodedString())"
 
@@ -312,6 +470,400 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         }
         throw NSError(domain: "Voxt.RemoteASR", code: -32, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian ASR returned no text content."])
     }
+
+    private func startAliyunFunStreaming(configuration: RemoteProviderConfiguration) throws {
+        let token = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -40, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian API key is empty."])
+        }
+
+        let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? RemoteASRProvider.aliyunBailianASR.suggestedModel
+            : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = resolvedAliyunFunRealtimeEndpoint(configuration.endpoint)
+        guard let wsURL = URL(string: endpoint) else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -41, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun realtime WebSocket endpoint URL."])
+        }
+
+        var request = URLRequest(url: wsURL)
+        request.timeoutInterval = 45
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("realtime=v1", forHTTPHeaderField: "OpenAI-Beta")
+        let ws = VoxtNetworkSession.active.webSocketTask(with: request)
+        ws.resume()
+
+        let taskID = UUID().uuidString.lowercased()
+        let responseState = AliyunFunResponseState()
+        let context = AliyunFunStreamingContext(ws: ws, taskID: taskID, responseState: responseState)
+        aliyunStreamingContext = context
+        receiveAliyunFunMessages(context)
+
+        sendAliyunFunControl(
+            action: "run-task",
+            through: ws,
+            taskID: taskID,
+            model: model,
+            parameters: [
+                "sample_rate": 16000,
+                "format": "pcm",
+                "language_hints": ["zh", "en"]
+            ]
+        ) { error in
+            Task { [responseState] in
+                if let error {
+                    await responseState.markCompletedWithError(error)
+                } else {
+                    await responseState.markRunRequested()
+                }
+            }
+        }
+        isRecording = true
+    }
+
+    private func receiveAliyunFunMessages(_ context: AliyunFunStreamingContext) {
+        context.ws.receive { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let message):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    do {
+                        if case .string(let text) = message {
+                            try await self.handleAliyunFunMessage(text, context: context)
+                        } else if case .data(let data) = message,
+                                  let text = String(data: data, encoding: .utf8) {
+                            try await self.handleAliyunFunMessage(text, context: context)
+                        }
+                    } catch {
+                        await context.responseState.markCompletedWithError(error)
+                    }
+                    if !context.isClosed {
+                        self.receiveAliyunFunMessages(context)
+                    }
+                }
+            case .failure(let error):
+                Task {
+                    await context.responseState.markCompletedWithError(error)
+                }
+            }
+        }
+    }
+
+    private func handleAliyunFunMessage(_ text: String, context: AliyunFunStreamingContext) async throws {
+        guard let data = text.data(using: .utf8),
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+        let event = (object["event"] as? String ?? "").lowercased()
+        let payload = object["payload"] as? [String: Any] ?? [:]
+
+        if event == "task-failed" || event == "error" {
+            let errorText = (payload["message"] as? String)
+                ?? (object["message"] as? String)
+                ?? "Aliyun fun ASR task failed."
+            throw NSError(domain: "Voxt.RemoteASR", code: -42, userInfo: [NSLocalizedDescriptionKey: errorText])
+        }
+
+        if event == "task-started", !context.didStartAudioStream {
+            do {
+                try startAliyunAudioCapture(context: context)
+                context.didStartAudioStream = true
+            } catch {
+                throw error
+            }
+            return
+        }
+
+        if event == "result-generated" {
+            let sentence = (payload["output"] as? [String: Any]).flatMap { output -> [String: Any]? in
+                output["sentence"] as? [String: Any]
+            } ?? [:]
+            let partialText = (sentence["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let isSentenceEnd = sentence["sentence_end"] as? Bool ?? false
+            if !partialText.isEmpty {
+                let merged = await context.responseState.updateWithSentence(partialText, isSentenceEnd: isSentenceEnd)
+                transcribedText = merged
+            }
+            return
+        }
+
+        if event == "task-finished" {
+            context.isClosed = true
+            await context.responseState.markTaskFinished()
+            return
+        }
+    }
+
+    private func startAliyunAudioCapture(context: AliyunFunStreamingContext) throws {
+        let inputNode = audioEngine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
+            guard let self else { return }
+            guard let pcmData = Self.makeDoubaoPCM16MonoData(from: buffer) else { return }
+            Task { @MainActor in
+                guard self.isRecording,
+                      let ctx = self.aliyunStreamingContext,
+                      !ctx.isClosed
+                else { return }
+                self.audioLevel = self.audioLevelFromPCM16(pcmData)
+                ctx.ws.send(.data(pcmData)) { error in
+                    if let error {
+                        Task { [responseState = ctx.responseState] in
+                            await responseState.markCompletedWithError(error)
+                        }
+                    }
+                }
+            }
+        }
+
+        audioEngine.prepare()
+        try audioEngine.start()
+    }
+
+    private func stopAliyunAudioCapture() {
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        audioLevel = 0
+    }
+
+    private func sendAliyunFunControl(
+        action: String,
+        through ws: URLSessionWebSocketTask,
+        taskID: String,
+        model: String? = nil,
+        parameters: [String: Any]? = nil,
+        onError: @escaping (Error?) -> Void
+    ) {
+        var payload: [String: Any] = [
+            "header": [
+                "action": action,
+                "task_id": taskID
+            ]
+        ]
+        if let model {
+            payload["payload"] = [
+                "task_group": "audio",
+                "task": "asr",
+                "function": "recognition",
+                "model": model,
+                "parameters": parameters ?? [:],
+                "input": [:]
+            ]
+        }
+        do {
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            guard let text = String(data: data, encoding: .utf8) else {
+                onError(NSError(domain: "Voxt.RemoteASR", code: -43, userInfo: [NSLocalizedDescriptionKey: "Failed to encode Aliyun fun control message."]))
+                return
+            }
+            ws.send(.string(text)) { error in
+                onError(error)
+            }
+        } catch {
+            onError(error)
+        }
+    }
+
+    private func startAliyunQwenRealtimeStreaming(configuration: RemoteProviderConfiguration) throws {
+        let token = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -44, userInfo: [NSLocalizedDescriptionKey: "Aliyun Bailian API key is empty."])
+        }
+
+        let model = configuration.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "qwen3-asr-flash-realtime"
+            : configuration.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = resolvedAliyunQwenRealtimeEndpoint(configuration.endpoint, model: model)
+        guard let wsURL = URL(string: endpoint) else {
+            throw NSError(domain: "Voxt.RemoteASR", code: -45, userInfo: [NSLocalizedDescriptionKey: "Invalid Aliyun Qwen realtime WebSocket endpoint URL."])
+        }
+
+        var request = URLRequest(url: wsURL)
+        request.timeoutInterval = 45
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let ws = VoxtNetworkSession.active.webSocketTask(with: request)
+        ws.resume()
+
+        let responseState = AliyunQwenResponseState()
+        let context = AliyunQwenStreamingContext(ws: ws, responseState: responseState)
+        aliyunQwenStreamingContext = context
+        receiveAliyunQwenMessages(context)
+        sendAliyunQwenSessionUpdate(through: ws) { error in
+            Task { [responseState] in
+                if let error {
+                    await responseState.markCompletedWithError(error)
+                }
+            }
+        }
+        isRecording = true
+    }
+
+    private func receiveAliyunQwenMessages(_ context: AliyunQwenStreamingContext) {
+        context.ws.receive { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let message):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    do {
+                        if case .string(let text) = message {
+                            try await self.handleAliyunQwenMessage(text, context: context)
+                        } else if case .data(let data) = message,
+                                  let text = String(data: data, encoding: .utf8) {
+                            try await self.handleAliyunQwenMessage(text, context: context)
+                        }
+                    } catch {
+                        await context.responseState.markCompletedWithError(error)
+                    }
+                    if !context.isClosed {
+                        self.receiveAliyunQwenMessages(context)
+                    }
+                }
+            case .failure(let error):
+                Task {
+                    await context.responseState.markCompletedWithError(error)
+                }
+            }
+        }
+    }
+
+    private func handleAliyunQwenMessage(_ text: String, context: AliyunQwenStreamingContext) async throws {
+        guard let data = text.data(using: .utf8),
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+        let type = (object["type"] as? String ?? "").lowercased()
+        if type == "error" {
+            let detail = (object["message"] as? String) ?? "Aliyun Qwen realtime ASR task failed."
+            throw NSError(domain: "Voxt.RemoteASR", code: -46, userInfo: [NSLocalizedDescriptionKey: detail])
+        }
+
+        if type == "session.updated", !context.didStartAudioStream {
+            try startAliyunQwenAudioCapture(context: context)
+            context.didStartAudioStream = true
+            return
+        }
+
+        if type == "conversation.item.input_audio_transcription.text" {
+            let partial = (object["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !partial.isEmpty {
+                let merged = await context.responseState.setPartial(partial)
+                transcribedText = merged
+            }
+            return
+        }
+
+        if type == "conversation.item.input_audio_transcription.completed" {
+            let final = (object["transcript"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !final.isEmpty {
+                let merged = await context.responseState.commit(final)
+                transcribedText = merged
+            }
+            return
+        }
+
+        if type == "session.finished" {
+            context.isClosed = true
+            await context.responseState.markSessionFinished()
+            return
+        }
+    }
+
+    private func startAliyunQwenAudioCapture(context: AliyunQwenStreamingContext) throws {
+        let inputNode = audioEngine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
+            guard let self else { return }
+            guard let pcmData = Self.makeDoubaoPCM16MonoData(from: buffer) else { return }
+            Task { @MainActor in
+                guard self.isRecording,
+                      let ctx = self.aliyunQwenStreamingContext,
+                      !ctx.isClosed
+                else { return }
+                self.audioLevel = self.audioLevelFromPCM16(pcmData)
+                self.sendAliyunQwenAudioAppend(pcmData, through: ctx.ws) { error in
+                    if let error {
+                        Task { [responseState = ctx.responseState] in
+                            await responseState.markCompletedWithError(error)
+                        }
+                    }
+                }
+            }
+        }
+        audioEngine.prepare()
+        try audioEngine.start()
+    }
+
+    private func sendAliyunQwenSessionUpdate(
+        through ws: URLSessionWebSocketTask,
+        onError: @escaping (Error?) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "event_id": UUID().uuidString.lowercased(),
+            "type": "session.update",
+            "session": [
+                "modalities": ["text"],
+                "input_audio_format": "pcm",
+                "sample_rate": 16000,
+                "input_audio_transcription": [
+                    "language": "zh"
+                ],
+                "turn_detection": [
+                    "type": "server_vad",
+                    "threshold": 0.0,
+                    "silence_duration_ms": 400
+                ]
+            ]
+        ]
+        sendAliyunQwenEvent(payload: payload, through: ws, onError: onError)
+    }
+
+    private func sendAliyunQwenAudioAppend(
+        _ audio: Data,
+        through ws: URLSessionWebSocketTask,
+        onError: @escaping (Error?) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "event_id": UUID().uuidString.lowercased(),
+            "type": "input_audio_buffer.append",
+            "audio": audio.base64EncodedString()
+        ]
+        sendAliyunQwenEvent(payload: payload, through: ws, onError: onError)
+    }
+
+    private func sendAliyunQwenEvent(
+        type: String,
+        through ws: URLSessionWebSocketTask,
+        onError: @escaping (Error?) -> Void
+    ) {
+        let payload: [String: Any] = [
+            "event_id": UUID().uuidString.lowercased(),
+            "type": type
+        ]
+        sendAliyunQwenEvent(payload: payload, through: ws, onError: onError)
+    }
+
+    private func sendAliyunQwenEvent(
+        payload: [String: Any],
+        through ws: URLSessionWebSocketTask,
+        onError: @escaping (Error?) -> Void
+    ) {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            guard let text = String(data: data, encoding: .utf8) else {
+                onError(NSError(domain: "Voxt.RemoteASR", code: -47, userInfo: [NSLocalizedDescriptionKey: "Failed to encode Aliyun Qwen realtime event."]))
+                return
+            }
+            ws.send(.string(text)) { error in
+                onError(error)
+            }
+        } catch {
+            onError(error)
+        }
+    }
+
 
     private func transcribeDoubaoWebSocket(
         fileURL: URL,
@@ -1192,18 +1744,93 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     }
 
     private func extractTextFragment(fromLine line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
         guard let data = line.data(using: .utf8) else {
-            return line
+            return trimmed
         }
 
         if let object = try? JSONSerialization.jsonObject(with: data) {
             if let value = extractText(in: object), !value.isEmpty {
-                return value
+                return normalizedTextFragment(value)
             }
             return nil
         }
 
-        return line
+        if let loose = extractLooseTextField(from: trimmed), !loose.isEmpty {
+            return normalizedTextFragment(loose)
+        }
+
+        // If this looks like a JSON/object payload but is non-standard (e.g. single quotes),
+        // avoid rendering raw object text in UI.
+        if (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
+            (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) {
+            return nil
+        }
+
+        return normalizedTextFragment(trimmed)
+    }
+
+    private func extractLooseTextField(from line: String) -> String? {
+        let patterns = [
+            #"(?:["']?text["']?\s*:\s*["'])([^"']+)(?:["'])"#,
+            #"(?:["']?transcript["']?\s*:\s*["'])([^"']+)(?:["'])"#,
+            #"(?:["']?result_text["']?\s*:\s*["'])([^"']+)(?:["'])"#,
+            #"(?:["']?text["']?\s*:\s*)([^,}\]]+)"#,
+            #"(?:["']?transcript["']?\s*:\s*)([^,}\]]+)"#,
+            #"(?:["']?result_text["']?\s*:\s*)([^,}\]]+)"#
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard let match = regex.firstMatch(in: line, options: [], range: range),
+                  match.numberOfRanges > 1,
+                  let valueRange = Range(match.range(at: 1), in: line) else {
+                continue
+            }
+            var value = String(line[valueRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
+                (value.hasPrefix("'") && value.hasSuffix("'")) {
+                value.removeFirst()
+                value.removeLast()
+                value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func normalizedTextFragment(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if isLikelyJSONObjectString(trimmed) {
+            if let data = trimmed.data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: data),
+               let nested = extractText(in: object),
+               !nested.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !isLikelyJSONObjectString(nested) {
+                return nested.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if let loose = extractLooseTextField(from: trimmed),
+               !isLikelyJSONObjectString(loose) {
+                return loose.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return nil
+        }
+
+        return trimmed
+    }
+
+    private func isLikelyJSONObjectString(_ value: String) -> Bool {
+        (value.hasPrefix("{") && value.hasSuffix("}")) ||
+        (value.hasPrefix("[") && value.hasSuffix("]"))
     }
 
     private func extractDoubaoText(in object: Any) -> String? {
@@ -1261,17 +1888,33 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     private func extractText(in object: Any) -> String? {
         if let text = object as? String {
-            return text
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            if isLikelyJSONObjectString(trimmed) {
+                if let data = trimmed.data(using: .utf8),
+                   let nestedObject = try? JSONSerialization.jsonObject(with: data),
+                   let nestedText = extractText(in: nestedObject),
+                   !nestedText.isEmpty {
+                    return nestedText
+                }
+                if let loose = extractLooseTextField(from: trimmed), !loose.isEmpty {
+                    return loose
+                }
+                return nil
+            }
+            return trimmed
         }
         if let dict = object as? [String: Any] {
-            let preferredKeys = ["delta", "text", "transcript", "result_text", "result", "content", "utterance"]
+            let preferredKeys = ["delta", "text", "transcript", "result_text", "content", "utterance", "data"]
             for key in preferredKeys {
                 if let value = dict[key], let text = extractText(in: value), !text.isEmpty {
                     return text
                 }
             }
             for value in dict.values {
-                if let text = extractText(in: value), !text.isEmpty {
+                if (value is [String: Any] || value is [Any]),
+                   let text = extractText(in: value),
+                   !text.isEmpty {
                     return text
                 }
             }
@@ -1357,34 +2000,137 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     }
 
     private func extractAliyunBailianASRText(from object: Any) -> String? {
-        guard let dict = object as? [String: Any],
-              let choices = dict["choices"] as? [[String: Any]],
-              let first = choices.first,
-              let message = first["message"] as? [String: Any]
-        else {
-            return nil
-        }
+        if let dict = object as? [String: Any] {
+            if let choices = dict["choices"] as? [[String: Any]],
+               let first = choices.first,
+               let message = first["message"] as? [String: Any] {
+                if let content = message["content"] as? String {
+                    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        return trimmed
+                    }
+                }
 
-        if let content = message["content"] as? String {
-            let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
+                if let blocks = message["content"] as? [[String: Any]] {
+                    let texts = blocks.compactMap { block -> String? in
+                        if let text = block["text"] as? String {
+                            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                        return nil
+                    }.filter { !$0.isEmpty }
+                    if !texts.isEmpty {
+                        return texts.joined(separator: "\n")
+                    }
+                }
+            }
+
+            if let output = dict["output"] as? [String: Any] {
+                if let text = output["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return text
+                }
+                if let results = output["results"] as? [[String: Any]] {
+                    let texts = results.compactMap { item in
+                        (item["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }.filter { !$0.isEmpty }
+                    if !texts.isEmpty {
+                        return texts.joined(separator: "\n")
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private func resolvedAliyunRealtimeEndpoint(_ endpoint: String) -> String {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        }
+        if let url = URL(string: trimmed) {
+            let normalizedPath = url.path.lowercased()
+            if normalizedPath.hasSuffix("/chat/completions") { return trimmed }
+            if normalizedPath.hasSuffix("/models") {
+                return replacingPathSuffix(in: trimmed, oldSuffix: "/models", newSuffix: "/chat/completions")
+            }
+        }
+        return trimmed
+    }
+
+    private func resolvedAliyunFunRealtimeEndpoint(_ endpoint: String) -> String {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+        }
+        if let url = URL(string: trimmed) {
+            let normalizedPath = url.path.lowercased()
+            if normalizedPath.hasSuffix("/api-ws/v1/inference") {
                 return trimmed
             }
-        }
-
-        if let blocks = message["content"] as? [[String: Any]] {
-            let texts = blocks.compactMap { block -> String? in
-                if let text = block["text"] as? String {
-                    return text.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                return nil
-            }.filter { !$0.isEmpty }
-            if !texts.isEmpty {
-                return texts.joined(separator: "\n")
+            if normalizedPath.hasSuffix("/models") {
+                return replacingPathSuffix(in: trimmed, oldSuffix: "/models", newSuffix: "/api-ws/v1/inference")
+            }
+            if normalizedPath.hasSuffix("/chat/completions") {
+                return replacingPathSuffix(in: trimmed, oldSuffix: "/chat/completions", newSuffix: "/api-ws/v1/inference")
+            }
+            if normalizedPath.hasSuffix("/v1") {
+                return appendingPath(trimmed, suffix: "/inference")
             }
         }
+        return trimmed
+    }
 
-        return nil
+    private func isAliyunFunRealtimeModel(_ model: String) -> Bool {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.hasPrefix("fun-asr") || normalized.hasPrefix("paraformer-realtime")
+    }
+
+    private func isAliyunQwenRealtimeModel(_ model: String) -> Bool {
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.hasPrefix("qwen3-asr-flash-realtime")
+    }
+
+    private func resolvedAliyunQwenRealtimeEndpoint(_ endpoint: String, model: String) -> String {
+        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? model
+
+        guard !trimmed.isEmpty else {
+            return "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=\(encodedModel)"
+        }
+        guard var components = URLComponents(string: trimmed) else {
+            return trimmed
+        }
+        let normalizedPath = components.path.lowercased()
+        if normalizedPath.hasSuffix("/api-ws/v1/realtime") {
+            var items = components.queryItems ?? []
+            if !items.contains(where: { $0.name == "model" }) {
+                items.append(URLQueryItem(name: "model", value: model))
+                components.queryItems = items
+            }
+            return components.string ?? trimmed
+        }
+        if normalizedPath.hasSuffix("/api-ws/v1/inference") {
+            components.path = components.path.replacingOccurrences(of: "/api-ws/v1/inference", with: "/api-ws/v1/realtime")
+            var items = components.queryItems ?? []
+            if !items.contains(where: { $0.name == "model" }) {
+                items.append(URLQueryItem(name: "model", value: model))
+            }
+            components.queryItems = items
+            return components.string ?? trimmed
+        }
+        if normalizedPath.hasSuffix("/chat/completions") {
+            let base = replacingPathSuffix(in: trimmed, oldSuffix: "/chat/completions", newSuffix: "/api-ws/v1/realtime")
+            return base.contains("?") ? base : "\(base)?model=\(encodedModel)"
+        }
+        return trimmed
+    }
+
+    private func appendingPath(_ value: String, suffix: String) -> String {
+        value.hasSuffix("/") ? value + suffix.dropFirst() : value + suffix
+    }
+
+    private func replacingPathSuffix(in value: String, oldSuffix: String, newSuffix: String) -> String {
+        guard value.lowercased().hasSuffix(oldSuffix) else { return value }
+        return String(value.dropLast(oldSuffix.count)) + newSuffix
     }
 
     private func collectText(from bytes: URLSession.AsyncBytes) async throws -> String {
@@ -1448,6 +2194,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         recorder = nil
         recordingFileURL = nil
         isRecording = false
+        stopOpenAIPreviewLoop()
         stopMeteringTimer()
     }
 
@@ -1460,21 +2207,284 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         stopDoubaoAudioCapture()
     }
 
+    private func cleanupAliyunStreamingState() {
+        if let context = aliyunStreamingContext {
+            context.isClosed = true
+            context.ws.cancel(with: .normalClosure, reason: nil)
+        }
+        aliyunStreamingContext = nil
+        if let context = aliyunQwenStreamingContext {
+            context.isClosed = true
+            context.ws.cancel(with: .normalClosure, reason: nil)
+        }
+        aliyunQwenStreamingContext = nil
+        stopAliyunAudioCapture()
+    }
+
     private func cleanupActiveUploadTask() {
         transcribeTask?.cancel()
         transcribeTask = nil
+        stopOpenAIPreviewLoop()
+    }
+
+    private func startOpenAIPreviewLoop(configuration: RemoteProviderConfiguration) {
+        stopOpenAIPreviewLoop()
+        openAIPreviewLastText = ""
+        openAIPreviewTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(1.4))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                await self.runOpenAIPreviewPass(configuration: configuration)
+            }
+        }
+    }
+
+    private func stopOpenAIPreviewLoop() {
+        openAIPreviewTask?.cancel()
+        openAIPreviewTask = nil
+        openAIPreviewInFlight = false
+    }
+
+    private func runOpenAIPreviewPass(configuration: RemoteProviderConfiguration) async {
+        guard isRecording else { return }
+        guard selectedProvider == .openAIWhisper else { return }
+        guard !openAIPreviewInFlight else { return }
+        guard let sourceURL = recordingFileURL else { return }
+
+        openAIPreviewInFlight = true
+        defer { openAIPreviewInFlight = false }
+
+        let snapshotURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voxt-openai-preview-\(UUID().uuidString)")
+            .appendingPathExtension("wav")
+
+        do {
+            if FileManager.default.fileExists(atPath: snapshotURL.path) {
+                try FileManager.default.removeItem(at: snapshotURL)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: snapshotURL)
+            defer { try? FileManager.default.removeItem(at: snapshotURL) }
+
+            let attrs = try FileManager.default.attributesOfItem(atPath: snapshotURL.path)
+            if let size = attrs[.size] as? Int64, size < 6_000 {
+                return
+            }
+
+            normalizeWAVHeaderForSnapshot(at: snapshotURL)
+
+            let preview = try await transcribeOpenAI(fileURL: snapshotURL, configuration: configuration)
+            let normalized = preview.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { return }
+            if normalized != openAIPreviewLastText {
+                openAIPreviewLastText = normalized
+                transcribedText = normalized
+            }
+        } catch {
+            // Preview failures are expected while recorder header is still mutating.
+        }
+    }
+
+    private func normalizeWAVHeaderForSnapshot(at fileURL: URL) {
+        guard var data = try? Data(contentsOf: fileURL), data.count >= 44 else { return }
+        guard String(data: data[0..<4], encoding: .ascii) == "RIFF",
+              String(data: data[8..<12], encoding: .ascii) == "WAVE" else {
+            return
+        }
+
+        let fileSize = UInt32(data.count)
+        let riffChunkSize = fileSize > 8 ? fileSize - 8 : 0
+        let dataChunkSize = fileSize > 44 ? fileSize - 44 : 0
+
+        writeLittleEndianUInt32(riffChunkSize, into: &data, at: 4)
+        writeLittleEndianUInt32(dataChunkSize, into: &data, at: 40)
+        try? data.write(to: fileURL, options: .atomic)
+    }
+
+    private func writeLittleEndianUInt32(_ value: UInt32, into data: inout Data, at offset: Int) {
+        guard data.count >= offset + 4 else { return }
+        let bytes = value.littleEndian
+        withUnsafeBytes(of: bytes) { raw in
+            data.replaceSubrange(offset..<(offset + 4), with: raw)
+        }
     }
 
     private func finish(with text: String) {
         cleanupActiveUploadTask()
         cleanupRecorderState()
         cleanupDoubaoStreamingState()
+        cleanupAliyunStreamingState()
         activeProvider = nil
         onTranscriptionFinished?(text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
 
-    @MainActor
+@MainActor
+private final class AliyunQwenStreamingContext {
+    let ws: URLSessionWebSocketTask
+    let responseState: AliyunQwenResponseState
+    var isClosed = false
+    var didStartAudioStream = false
+
+    init(ws: URLSessionWebSocketTask, responseState: AliyunQwenResponseState) {
+        self.ws = ws
+        self.responseState = responseState
+    }
+}
+
+private actor AliyunQwenResponseState {
+    private var committed: [String] = []
+    private var partial = ""
+    private var finishRequested = false
+    private var sessionFinished = false
+    private var completionError: Error?
+
+    func markFinishRequested() {
+        finishRequested = true
+    }
+
+    func markSessionFinished() {
+        sessionFinished = true
+    }
+
+    func markCompletedWithError(_ error: Error) {
+        if completionError == nil {
+            completionError = error
+        }
+    }
+
+    func setPartial(_ value: String) -> String {
+        partial = value
+        return mergedText()
+    }
+
+    func commit(_ value: String) -> String {
+        if committed.last != value {
+            committed.append(value)
+        }
+        partial = ""
+        return mergedText()
+    }
+
+    func waitForFinalResult(timeoutSeconds: TimeInterval) async throws -> String {
+        let deadline = Date().addingTimeInterval(max(timeoutSeconds, 0))
+        while !sessionFinished, completionError == nil, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(120))
+        }
+        if let completionError {
+            throw completionError
+        }
+        if finishRequested, !partial.isEmpty {
+            if committed.last != partial {
+                committed.append(partial)
+            }
+            partial = ""
+        }
+        return mergedText()
+    }
+
+    func currentText() -> String {
+        mergedText()
+    }
+
+    private func mergedText() -> String {
+        var values = committed
+        if !partial.isEmpty {
+            values.append(partial)
+        }
+        return values.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+@MainActor
+private final class AliyunFunStreamingContext {
+    let ws: URLSessionWebSocketTask
+    let taskID: String
+    let responseState: AliyunFunResponseState
+    var isClosed = false
+    var didStartAudioStream = false
+
+    init(ws: URLSessionWebSocketTask, taskID: String, responseState: AliyunFunResponseState) {
+        self.ws = ws
+        self.taskID = taskID
+        self.responseState = responseState
+    }
+}
+
+private actor AliyunFunResponseState {
+    private var committedSegments: [String] = []
+    private var livePartial = ""
+    private var finishRequested = false
+    private var taskFinished = false
+    private var completionError: Error?
+
+    func markRunRequested() {}
+
+    func markFinishRequested() {
+        finishRequested = true
+    }
+
+    func markTaskFinished() {
+        taskFinished = true
+    }
+
+    func markCompletedWithError(_ error: Error) {
+        if completionError == nil {
+            completionError = error
+        }
+    }
+
+    func updateWithSentence(_ text: String, isSentenceEnd: Bool) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return joinedText()
+        }
+        if isSentenceEnd {
+            if committedSegments.last != trimmed {
+                committedSegments.append(trimmed)
+            }
+            livePartial = ""
+        } else {
+            livePartial = trimmed
+        }
+        return joinedText()
+    }
+
+    func waitForFinalResult(timeoutSeconds: TimeInterval) async throws -> String {
+        let deadline = Date().addingTimeInterval(max(timeoutSeconds, 0))
+        while !taskFinished, completionError == nil, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(120))
+        }
+        if let completionError {
+            throw completionError
+        }
+        if finishRequested, !livePartial.isEmpty {
+            if committedSegments.last != livePartial {
+                committedSegments.append(livePartial)
+            }
+            livePartial = ""
+        }
+        return joinedText()
+    }
+
+    func currentText() -> String {
+        joinedText()
+    }
+
+    private func joinedText() -> String {
+        var segments = committedSegments
+        if !livePartial.isEmpty {
+            segments.append(livePartial)
+        }
+        return segments.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+@MainActor
 private final class DoubaoStreamingContext {
     let ws: URLSessionWebSocketTask
     let responseState: DoubaoResponseState

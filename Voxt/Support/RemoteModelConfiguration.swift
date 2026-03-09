@@ -35,7 +35,7 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
         case .glmASR:
             return "glm-asr-1"
         case .aliyunBailianASR:
-            return "qwen3-asr-flash"
+            return "fun-asr-realtime"
         }
     }
 
@@ -58,8 +58,19 @@ enum RemoteASRProvider: String, CaseIterable, Identifiable {
             ]
         case .aliyunBailianASR:
             return [
-                RemoteModelOption(id: "qwen3-asr-flash", title: "Qwen3 ASR Flash"),
-                RemoteModelOption(id: "qwen3-asr-flash-filetrans", title: "Qwen3 ASR Flash FileTrans")
+                RemoteModelOption(id: "qwen3-asr-flash-realtime", title: "Qwen3 ASR Flash Realtime"),
+                RemoteModelOption(id: "qwen3-asr-flash-realtime-2026-02-10", title: "Qwen3 ASR Flash Realtime (2026-02-10)"),
+                RemoteModelOption(id: "qwen3-asr-flash-realtime-2025-10-27", title: "Qwen3 ASR Flash Realtime (2025-10-27)"),
+                RemoteModelOption(id: "fun-asr-realtime", title: "Fun ASR Realtime"),
+                RemoteModelOption(id: "fun-asr-realtime-2026-02-28", title: "Fun ASR Realtime (2026-02-28)"),
+                RemoteModelOption(id: "fun-asr-realtime-2025-11-07", title: "Fun ASR Realtime (2025-11-07)"),
+                RemoteModelOption(id: "fun-asr-realtime-2025-09-15", title: "Fun ASR Realtime (2025-09-15)"),
+                RemoteModelOption(id: "fun-asr-flash-8k-realtime", title: "Fun ASR Flash 8k Realtime"),
+                RemoteModelOption(id: "fun-asr-flash-8k-realtime-2026-01-28", title: "Fun ASR Flash 8k Realtime (2026-01-28)"),
+                RemoteModelOption(id: "paraformer-realtime-v2", title: "Paraformer Realtime V2"),
+                RemoteModelOption(id: "paraformer-realtime-v1", title: "Paraformer Realtime V1"),
+                RemoteModelOption(id: "paraformer-realtime-8k-v2", title: "Paraformer Realtime 8k V2"),
+                RemoteModelOption(id: "paraformer-realtime-8k-v1", title: "Paraformer Realtime 8k V1")
             ]
         }
     }
@@ -415,6 +426,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
     var apiKey: String
     var appID: String
     var accessToken: String
+    var openAIChunkPseudoRealtimeEnabled: Bool
 
     var id: String { providerID }
 
@@ -435,7 +447,8 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         endpoint: String,
         apiKey: String,
         appID: String = "",
-        accessToken: String = ""
+        accessToken: String = "",
+        openAIChunkPseudoRealtimeEnabled: Bool = false
     ) {
         self.providerID = providerID
         self.model = model
@@ -443,6 +456,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         self.apiKey = apiKey
         self.appID = appID
         self.accessToken = accessToken
+        self.openAIChunkPseudoRealtimeEnabled = openAIChunkPseudoRealtimeEnabled
     }
 
     enum CodingKeys: String, CodingKey {
@@ -452,6 +466,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         case apiKey
         case appID
         case accessToken
+        case openAIChunkPseudoRealtimeEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -462,6 +477,7 @@ struct RemoteProviderConfiguration: Codable, Identifiable, Hashable {
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
         appID = try container.decodeIfPresent(String.self, forKey: .appID) ?? ""
         accessToken = try container.decodeIfPresent(String.self, forKey: .accessToken) ?? ""
+        openAIChunkPseudoRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .openAIChunkPseudoRealtimeEnabled) ?? false
     }
 }
 
@@ -501,6 +517,9 @@ enum RemoteModelConfigurationStore {
             }
             if !allowedModelIDs.contains(normalized.model) {
                 normalized.model = provider.suggestedModel
+            }
+            if provider != .openAIWhisper {
+                normalized.openAIChunkPseudoRealtimeEnabled = false
             }
             return normalized
         }

@@ -210,6 +210,15 @@
 "Download Update" = "Download Update";
 "Download progress: %.0f%%" = "Download progress: %.0f%%";
 "Permissions Disabled" = "Permissions Disabled";
+"Chunk Pseudo Realtime Preview" = "Chunk Pseudo Realtime Preview";
+"Enable segmented OpenAI ASR preview during recording. This roughly doubles usage." = "Enable segmented OpenAI ASR preview during recording. This roughly doubles usage.";
+"New Version Available" = "New Version Available";
+"Update Information" = "Update Information";
+"Check Again" = "Check Again";
+"Unable to check for updates.\n\n%@" = "Unable to check for updates.\n\n%@";
+"A new version of Voxt is available:\n%@" = "A new version of Voxt is available:\n%@";
+"No update information is currently available." = "No update information is currently available.";
+"Installer service is unavailable." = "Installer service is unavailable.";
 "Please enable required permissions in Settings > Permissions." = "Please enable required permissions in Settings > Permissions.";
 "Microphone permission is required. Enable it in Settings > Permissions." = "Microphone permission is required. Enable it in Settings > Permissions.";
 "Speech Recognition permission is required for Direct Dictation. Enable it in Settings > Permissions." = "Speech Recognition permission is required for Direct Dictation. Enable it in Settings > Permissions.";
@@ -361,3 +370,7 @@
 "Kimi" = "Kimi";
 "LM Studio" = "LM Studio";
 "MiniMax" = "MiniMax";
+
+"Supported variable: {{RAW_TRANSCRIPTION}}" = "Supported variable: {{RAW_TRANSCRIPTION}}";
+
+"Supported variables: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}" = "Supported variables: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}";

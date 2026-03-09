@@ -137,7 +137,8 @@ extension AppDelegate {
     }
 
     private func enhanceTextIfNeeded(_ text: String, useAppBranchPrompt: Bool = true) async throws -> String {
-        let prompt = useAppBranchPrompt ? resolvedEnhancementPrompt() : resolvedGlobalEnhancementPrompt()
+        let promptTemplate = useAppBranchPrompt ? resolvedEnhancementPrompt() : resolvedGlobalEnhancementPrompt()
+        let prompt = resolveEnhancementPromptTemplate(promptTemplate, rawTranscription: text)
         if !useAppBranchPrompt {
             VoxtLog.info("Enhancement prompt source: global/default (translation flow)")
         }
@@ -166,7 +167,11 @@ extension AppDelegate {
     }
 
     private func translateText(_ text: String, targetLanguage: TranslationTargetLanguage) async throws -> String {
-        let resolvedPrompt = resolvedTranslationPrompt(targetLanguage: targetLanguage, strict: false)
+        let resolvedPrompt = resolvedTranslationPrompt(
+            targetLanguage: targetLanguage,
+            sourceText: text,
+            strict: false
+        )
         let translationRepo = translationCustomLLMRepo
         let modelProvider = translationModelProvider
         VoxtLog.info(
@@ -211,7 +216,11 @@ extension AppDelegate {
     }
 
     private func translateTextStrict(_ text: String, targetLanguage: TranslationTargetLanguage) async throws -> String {
-        let strictPrompt = resolvedTranslationPrompt(targetLanguage: targetLanguage, strict: true)
+        let strictPrompt = resolvedTranslationPrompt(
+            targetLanguage: targetLanguage,
+            sourceText: text,
+            strict: true
+        )
         let translationRepo = translationCustomLLMRepo
         let modelProvider = translationModelProvider
         VoxtLog.info(
@@ -243,11 +252,15 @@ extension AppDelegate {
         }
     }
 
-    private func resolvedTranslationPrompt(targetLanguage: TranslationTargetLanguage, strict: Bool) -> String {
-        let basePrompt = translationSystemPrompt.replacingOccurrences(
-            of: "{target_language}",
-            with: targetLanguage.instructionName
-        )
+    private func resolvedTranslationPrompt(
+        targetLanguage: TranslationTargetLanguage,
+        sourceText: String,
+        strict: Bool
+    ) -> String {
+        let basePrompt = translationSystemPrompt
+            .replacingOccurrences(of: "{target_language}", with: targetLanguage.instructionName) // backward-compatible
+            .replacingOccurrences(of: "{{TARGET_LANGUAGE}}", with: targetLanguage.instructionName)
+            .replacingOccurrences(of: "{{SOURCE_TEXT}}", with: sourceText)
 
         let enforcement = strict
             ? """

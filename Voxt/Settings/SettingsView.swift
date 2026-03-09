@@ -8,12 +8,13 @@ struct SettingsView: View {
     @ObservedObject var mlxModelManager: MLXModelManager
     @ObservedObject var customLLMManager: CustomLLMModelManager
     @ObservedObject var historyStore: TranscriptionHistoryStore
-    let appUpdateManager: AppUpdateManager
+    @ObservedObject var appUpdateManager: AppUpdateManager
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
     @State private var selectedTab: SettingsTab
     @State private var hasMissingPermissions = false
     @State private var languageRefreshToken = UUID()
+    @State private var updateBadgeAlertMessage: String?
 
     init(
         mlxModelManager: MLXModelManager,
@@ -39,8 +40,12 @@ struct SettingsView: View {
                     selectedTab: $selectedTab,
                     appEnhancementEnabled: appEnhancementEnabled,
                     hasMissingPermissions: hasMissingPermissions,
+                    updateBadgeState: updateBadgeState,
                     onTapPermissionBadge: {
                         selectedTab = .permissions
+                    },
+                    onTapUpdateBadge: {
+                        presentUpdateBadgeDetails()
                     }
                 )
                     .frame(width: 170)
@@ -51,50 +56,7 @@ struct SettingsView: View {
                         .font(.title3.weight(.semibold))
                         .padding(.horizontal, 8)
 
-                    if selectedTab == .history || selectedTab == .report || selectedTab == .appEnhancement {
-                        Group {
-                            if selectedTab == .history {
-                                HistorySettingsView(historyStore: historyStore)
-                            } else if selectedTab == .appEnhancement {
-                                AppEnhancementSettingsView()
-                            } else {
-                                ReportSettingsView(historyStore: historyStore)
-                            }
-                        }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .padding(.horizontal, 8)
-                            .padding(.top, 2)
-                    } else {
-                        ScrollView {
-                            Group {
-                                switch selectedTab {
-                                case .general:
-                                    GeneralSettingsView(appUpdateManager: appUpdateManager)
-                                case .permissions:
-                                    PermissionsSettingsView()
-                                case .report:
-                                    EmptyView()
-                                case .model:
-                                    ModelSettingsView(
-                                        mlxModelManager: mlxModelManager,
-                                        customLLMManager: customLLMManager
-                                    )
-                                case .appEnhancement:
-                                    EmptyView()
-                                case .hotkey:
-                                    HotkeySettingsView()
-                                case .about:
-                                    AboutSettingsView(appUpdateManager: appUpdateManager)
-                                case .history:
-                                    EmptyView()
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(.horizontal, 8)
-                            .padding(.top, 2)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    }
+                    tabContent
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -129,10 +91,94 @@ struct SettingsView: View {
                 selectedTab = .model
             }
         }
+        .alert(
+            String(localized: "Update Information"),
+            isPresented: Binding(
+                get: { updateBadgeAlertMessage != nil },
+                set: { if !$0 { updateBadgeAlertMessage = nil } }
+            ),
+            actions: {
+                Button(String(localized: "Check Again")) {
+                    appUpdateManager.checkForUpdates(source: .manual)
+                }
+                Button(String(localized: "OK"), role: .cancel) {}
+            },
+            message: {
+                Text(updateBadgeAlertMessage ?? "")
+            }
+        )
     }
 
     private var interfaceLanguage: AppInterfaceLanguage {
         AppInterfaceLanguage(rawValue: interfaceLanguageRaw) ?? .system
+    }
+
+    private var updateBadgeState: UpdateBadgeState {
+        if let issue = appUpdateManager.updateCheckIssueMessage,
+           !issue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .checkFailed(issue)
+        }
+        if appUpdateManager.hasUpdate {
+            return .newVersion(appUpdateManager.latestVersion)
+        }
+        return .none
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        if selectedTab == .history || selectedTab == .report || selectedTab == .appEnhancement {
+            staticTabContent
+        } else {
+            scrollableTabContent
+        }
+    }
+
+    @ViewBuilder
+    private var staticTabContent: some View {
+        Group {
+            if selectedTab == .history {
+                HistorySettingsView(historyStore: historyStore)
+            } else if selectedTab == .appEnhancement {
+                AppEnhancementSettingsView()
+            } else {
+                ReportSettingsView(historyStore: historyStore)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 8)
+        .padding(.top, 2)
+    }
+
+    private var scrollableTabContent: some View {
+        ScrollView {
+            Group {
+                switch selectedTab {
+                case .general:
+                    GeneralSettingsView(appUpdateManager: appUpdateManager)
+                case .permissions:
+                    PermissionsSettingsView()
+                case .report:
+                    EmptyView()
+                case .model:
+                    ModelSettingsView(
+                        mlxModelManager: mlxModelManager,
+                        customLLMManager: customLLMManager
+                    )
+                case .appEnhancement:
+                    EmptyView()
+                case .hotkey:
+                    HotkeySettingsView()
+                case .about:
+                    AboutSettingsView(appUpdateManager: appUpdateManager)
+                case .history:
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 8)
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func refreshPermissionBadge() {
@@ -147,13 +193,33 @@ struct SettingsView: View {
         }
         hasMissingPermissions = !(microphoneGranted && speechGranted && accessibilityGranted && inputMonitoringGranted)
     }
+
+    private func presentUpdateBadgeDetails() {
+        switch updateBadgeState {
+        case .checkFailed(let issue):
+            updateBadgeAlertMessage = AppLocalization.format(
+                "Unable to check for updates.\n\n%@",
+                issue
+            )
+        case .newVersion(let version):
+            let resolvedVersion = version ?? AppLocalization.localizedString("A new version is available.")
+            updateBadgeAlertMessage = AppLocalization.format(
+                "A new version of Voxt is available:\n%@",
+                resolvedVersion
+            )
+        case .none:
+            updateBadgeAlertMessage = AppLocalization.localizedString("No update information is currently available.")
+        }
+    }
 }
 
 private struct SettingsSidebar: View {
     @Binding var selectedTab: SettingsTab
     let appEnhancementEnabled: Bool
     let hasMissingPermissions: Bool
+    let updateBadgeState: UpdateBadgeState
     let onTapPermissionBadge: () -> Void
+    let onTapUpdateBadge: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -208,6 +274,31 @@ private struct SettingsSidebar: View {
                 .buttonStyle(.plain)
             }
 
+            if updateBadgeState != .none {
+                Button(action: onTapUpdateBadge) {
+                    HStack(spacing: 8) {
+                        Image(systemName: updateBadgeState.iconName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(updateBadgeState.tintColor)
+                        Text(updateBadgeState.titleKey)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(updateBadgeState.tintColor)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(updateBadgeState.tintColor.opacity(0.10))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(updateBadgeState.tintColor.opacity(0.35), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 10)
@@ -227,6 +318,45 @@ private struct SettingsSidebar: View {
     private var visibleTabs: [SettingsTab] {
         SettingsTab.allCases.filter { tab in
             appEnhancementEnabled || tab != .appEnhancement
+        }
+    }
+}
+
+private enum UpdateBadgeState: Equatable {
+    case none
+    case checkFailed(String)
+    case newVersion(String?)
+
+    var iconName: String {
+        switch self {
+        case .none:
+            return "arrow.down.circle.fill"
+        case .checkFailed:
+            return "exclamationmark.triangle.fill"
+        case .newVersion:
+            return "arrow.down.circle.fill"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .none:
+            return .clear
+        case .checkFailed:
+            return .orange
+        case .newVersion:
+            return .green
+        }
+    }
+
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .none:
+            return "New Version Available"
+        case .checkFailed:
+            return "Update Check Failed"
+        case .newVersion:
+            return "New Version Available"
         }
     }
 }

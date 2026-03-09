@@ -210,6 +210,15 @@
 "Download Update" = "下载更新";
 "Download progress: %.0f%%" = "下载进度：%.0f%%";
 "Permissions Disabled" = "权限未开启";
+"Chunk Pseudo Realtime Preview" = "Chunk 伪实时预览";
+"Enable segmented OpenAI ASR preview during recording. This roughly doubles usage." = "开启后会在录制中分段调用 OpenAI ASR 进行预览，约双倍消耗。";
+"New Version Available" = "发现新版本";
+"Update Information" = "更新信息";
+"Check Again" = "重新检查";
+"Unable to check for updates.\n\n%@" = "无法检查更新。\n\n%@";
+"A new version of Voxt is available:\n%@" = "发现 Voxt 新版本：\n%@";
+"No update information is currently available." = "当前暂无更新信息。";
+"Installer service is unavailable." = "更新安装服务不可用。";
 "Please enable required permissions in Settings > Permissions." = "请在设置 > 权限中开启应用所需权限。";
 "Microphone permission is required. Enable it in Settings > Permissions." = "需要麦克风权限，请在设置 > 权限中开启。";
 "Speech Recognition permission is required for Direct Dictation. Enable it in Settings > Permissions." = "Direct Dictation 需要语音识别权限，请在设置 > 权限中开启。";
@@ -361,3 +370,7 @@
 "Kimi" = "Kimi";
 "LM Studio" = "LM Studio";
 "MiniMax" = "MiniMax";
+
+"Supported variable: {{RAW_TRANSCRIPTION}}" = "支持变量：{{RAW_TRANSCRIPTION}}";
+
+"Supported variables: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}" = "支持变量：{{TARGET_LANGUAGE}}、{{SOURCE_TEXT}}";

@@ -6,6 +6,30 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-03-09
+
+### Added
+- Added prompt template variable support for enhancement and translation:
+  - Enhancement: `{{RAW_TRANSCRIPTION}}`
+  - Translation: `{{TARGET_LANGUAGE}}`, `{{SOURCE_TEXT}}`
+- Added prompt variable hints below prompt textareas in model settings (localized in English, Simplified Chinese, and Japanese).
+- Added OpenAI ASR chunk pseudo-realtime preview option (default off) with explicit usage-cost hint.
+
+### Changed
+- Updated default enhancement prompt to the new structured instruction template with strict output constraints.
+- Updated default translation prompt to the new structured template with explicit target/source variable blocks and strict translation rules.
+- Improved recording overlay waveform visibility and interaction feedback (stronger amplitude response, higher dynamic range, clearer bar rendering).
+
+### Fixed
+- Fixed OpenAI ASR preview text rendering/parsing in overlay to avoid JSON-like raw payload display artifacts.
+- Fixed update check/install UX to reduce disruptive failure popups and surface status via settings sidebar badge with detail action.
+
+### Refactored
+- Reduced settings-layer coupling by extracting remote provider configuration sheet from `ModelSettingsView`.
+- Moved remote provider connectivity test logic to `RemoteProviderConnectivityTester` (support layer).
+- Moved remote provider model/endpoint selection policy to `RemoteProviderConfigurationPolicy` (support layer).
+- Simplified update state handling and notification flow in `AppUpdateManager`.
+
 ## [1.4.1] - 2026-03-09
 
 ### Fixed
