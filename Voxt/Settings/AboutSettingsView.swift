@@ -10,7 +10,7 @@ struct AboutSettingsView: View {
     @State private var logExportStatus: String?
     @State private var hostWindow: NSWindow?
 
-    private var appVersionText: String? {
+    private var appVersionText: String {
         let bundle = Bundle.main
         let shortVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
@@ -18,13 +18,13 @@ struct AboutSettingsView: View {
         if let shortVersion, let buildVersion, !buildVersion.isEmpty {
             return "\(shortVersion) (\(buildVersion))"
         }
-        if let shortVersion {
+        if let shortVersion, !shortVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return shortVersion
         }
-        if let buildVersion {
+        if let buildVersion, !buildVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return buildVersion
         }
-        return nil
+        return String(localized: "Version metadata missing")
     }
 
     var body: some View {
@@ -37,21 +37,19 @@ struct AboutSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    if let version = appVersionText {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            HStack(spacing: 4) {
-                                Text("Version")
-                                Text(version)
-                            }
-                            Spacer(minLength: 0)
-                            Button(String(localized: "Check for Updates…")) {
-                                appUpdateManager.checkForUpdates(source: .manual)
-                            }
-                            .controlSize(.small)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        HStack(spacing: 4) {
+                            Text("Version")
+                            Text(appVersionText)
                         }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Button(String(localized: "Check for Updates…")) {
+                            appUpdateManager.checkForUpdates(source: .manual)
+                        }
+                        .controlSize(.small)
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)

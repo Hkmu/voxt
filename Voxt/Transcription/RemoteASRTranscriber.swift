@@ -1046,9 +1046,11 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     ) {
         ws.send(.data(packet)) { error in
             if let error {
-                let nsError = error as NSError
-                let isBenign = self.isBenignDoubaoSocketError(nsError)
-                onError(error, isBenign)
+                Task { @MainActor in
+                    let nsError = error as NSError
+                    let isBenign = self.isBenignDoubaoSocketError(nsError)
+                    onError(error, isBenign)
+                }
             }
         }
     }
@@ -1167,7 +1169,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
                     }
                 }
             case .failure(let error):
-                Task {
+                Task { @MainActor in
                     let nsError = error as NSError
                     if self.isBenignDoubaoSocketError(nsError) {
                         context.isClosed = true

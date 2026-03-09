@@ -15,6 +15,7 @@ struct WaveformView: View {
     @State private var animTimer: Timer?
     @State private var appeared = false
     @State private var textScrollID = UUID()
+    @State private var pendingScrollWorkItem: DispatchWorkItem?
     @State private var spinAngle: Double = 0
 
     /// Whether we have text to show (drives expansion)
@@ -177,9 +178,14 @@ struct WaveformView: View {
                         }
                     )
                     .onChange(of: displayText) {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(textScrollID, anchor: .trailing)
+                        pendingScrollWorkItem?.cancel()
+                        let workItem = DispatchWorkItem {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(textScrollID, anchor: .trailing)
+                            }
                         }
+                        pendingScrollWorkItem = workItem
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: workItem)
                     }
                 }
                 .transition(.opacity)
@@ -209,6 +215,8 @@ struct WaveformView: View {
         }
         .onDisappear {
             stopAnimating()
+            pendingScrollWorkItem?.cancel()
+            pendingScrollWorkItem = nil
             appeared = false
         }
     }

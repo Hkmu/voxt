@@ -22,8 +22,8 @@
     <string>Voxt uses speech recognition for direct dictation.</string>
     <key>SUEnableInstallerLauncherService</key>
     <true/>
-    <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/hehehai/voxt/main/updates/appcast.xml</string>
+	<key>SUFeedURL</key>
+	<string>https://voxt.actnow.dev/updates/stable/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>iMt1voRdgfUUpKxdY7DliGLaOl17gJFB8Jhlo5ox2eE=</string>
 </dict>

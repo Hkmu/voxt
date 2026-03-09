@@ -374,3 +374,5 @@
 "Supported variable: {{RAW_TRANSCRIPTION}}" = "サポート変数: {{RAW_TRANSCRIPTION}}";
 
 "Supported variables: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}" = "サポート変数: {{TARGET_LANGUAGE}}, {{SOURCE_TEXT}}";
+
+"Version metadata missing" = "バージョンメタデータが不足しています";

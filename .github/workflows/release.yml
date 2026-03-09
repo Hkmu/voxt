@@ -318,6 +318,8 @@ jobs:
           require_bool_true "SUEnableInstallerLauncherService"
           require_non_empty_string "SUFeedURL"
           require_non_empty_string "SUPublicEDKey"
+          require_non_empty_string "CFBundleShortVersionString"
+          require_non_empty_string "CFBundleVersion"
 
       - name: Sign Sparkle and app bundle with Developer ID
         run: |
