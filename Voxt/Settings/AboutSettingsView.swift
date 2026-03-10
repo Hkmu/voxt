@@ -59,7 +59,7 @@ struct AboutSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("License")
                         .font(.headline)
-                    Text("MIT License")
+                    Text("Apache License 2.0")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

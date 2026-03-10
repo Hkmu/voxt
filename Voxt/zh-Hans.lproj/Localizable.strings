@@ -68,7 +68,7 @@
 "On-device push-to-talk transcription powered by MLX Audio." = "基于 MLX Audio 的本地按键说话转录。";
 "Version" = "版本";
 "License" = "许可证";
-"MIT License" = "MIT 许可证";
+"Apache License 2.0" = "Apache 2.0 许可证";
 "Project" = "项目";
 "Author" = "作者";
 "Thanks" = "感谢";

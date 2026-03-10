@@ -14,7 +14,7 @@
   <a href="https://github.com/hehehai/voxt/releases/latest">
     <img alt="Release" src="https://img.shields.io/github/v/release/hehehai/voxt?label=release&color=brightgreen">
   </a>
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
+  <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue">
 </p>
 
 <p align="center">
@@ -127,4 +127,4 @@ xcodebuild -project Voxt.xcodeproj -scheme Voxt -destination 'platform=macOS' bu
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache 2.0. See [LICENSE](LICENSE).
