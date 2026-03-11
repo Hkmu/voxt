@@ -125,6 +125,8 @@ Common local LLM errors / states:
 
 For faster or more realtime transcription and enhancement, configure `Remote ASR` and `Remote LLM` separately in Model Settings. The tables below list only the provider entry points and recommended defaults that Voxt currently exposes in code.
 
+For fuller provider notes, signup links, endpoints, and configuration examples, see [docs/RemoteModel.md](docs/RemoteModel.md).
+
 #### Remote ASR Providers
 
 | Provider | Built-in Model Options | Language Support | Realtime Support | Speed | Recommendation | Current Integration |

@@ -126,7 +126,11 @@ brew install --cask voxt
 
 为了更快或更实时的转录 / 增强，你可以在“模型”里分别配置 `Remote ASR` 和 `Remote LLM`。下面的表格只列 Voxt 当前代码里真正提供的 provider 入口与默认推荐模型。
 
+更完整的服务商介绍、申请入口、端点和配置示例见：[RemoteModel.zh-CN.md](./RemoteModel.zh-CN.md)。
+
 #### 远程 ASR 服务商
+
+> ⭐ 推荐 火山 豆包 ASR 效果好，速度快！
 
 | 服务商 | 项目内置模型选项 | 支持语言 | 实时支持 | 速度 | 推荐度 | 当前接入方式 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -147,6 +151,8 @@ brew install --cask voxt
 - Doubao 还可能出现 GZIP 初始化 / 解码失败，Aliyun 还可能出现 `task-failed` 或鉴权 403
 
 #### 远程 LLM 服务商
+
+> ⭐ 推荐 阿里云百炼 Qwen Plus，速度非常快！
 
 | 服务商 | 项目内置推荐模型 | 接口形态 | 用途 | 当前状态 |
 | --- | --- | --- | --- | --- |
