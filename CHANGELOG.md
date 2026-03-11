@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-03-11
+
+### Added
+- Added configuration export/import in General settings for app preferences, models, app branch rules, and hotkeys.
+- Added model setup warning badges after configuration import to guide users to incomplete provider or model setup.
+
+### Fixed
+- Fixed Sparkle no-update results so "already up to date" no longer appears as update check failure in settings.
+- Fixed app branch configuration export so group and URL entries are serialized from their stored data payloads.
+
 ## [1.4.7] - 2026-03-10
 
 ### Added

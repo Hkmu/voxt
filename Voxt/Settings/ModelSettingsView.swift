@@ -25,6 +25,7 @@ struct ModelSettingsView: View {
 
     @ObservedObject var mlxModelManager: MLXModelManager
     @ObservedObject var customLLMManager: CustomLLMModelManager
+    let missingConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue]
     @State private var showMirrorInfo = false
     @State private var editingASRProvider: RemoteASRProvider?
     @State private var editingLLMProvider: RemoteLLMProvider?
@@ -599,6 +600,7 @@ struct ModelSettingsView: View {
                 title: provider.title,
                 isActive: selectedRemoteASRProvider == provider,
                 status: status,
+                badgeText: hasIssue(for: .remoteASRProvider(provider)) ? String(localized: "Needs Setup") : nil,
                 actions: [
                     ModelTableAction(
                         title: LocalizedStringKey(selectedRemoteASRProvider == provider ? "Using" : "Use"),
@@ -628,6 +630,7 @@ struct ModelSettingsView: View {
                 title: provider.title,
                 isActive: selectedRemoteLLMProvider == provider,
                 status: status,
+                badgeText: remoteLLMBadgeText(for: provider),
                 actions: [
                     ModelTableAction(
                         title: LocalizedStringKey(selectedRemoteLLMProvider == provider ? "Using" : "Use"),
@@ -821,6 +824,7 @@ struct ModelSettingsView: View {
                 title: model.title,
                 isActive: isCurrentModel(model.id),
                 status: modelStatusText(for: model.id),
+                badgeText: hasIssue(for: .mlxModel(model.id)) ? String(localized: "Needs Setup") : nil,
                 isTitleUnderlined: isDownloaded,
                 onTapTitle: isDownloaded ? { openMLXModelDirectory(model.id) } : nil,
                 actions: actions
@@ -863,11 +867,34 @@ struct ModelSettingsView: View {
                 title: model.title,
                 isActive: isCurrentCustomLLM(model.id),
                 status: customLLMStatusText(for: model.id),
+                badgeText: customLLMBadgeText(for: model.id),
                 isTitleUnderlined: isDownloaded,
                 onTapTitle: isDownloaded ? { openCustomLLMModelDirectory(model.id) } : nil,
                 actions: actions
             )
         }
+    }
+
+    private func hasIssue(for scope: ConfigurationTransferManager.MissingConfigurationIssue.Scope) -> Bool {
+        missingConfigurationIssues.contains(where: { $0.scope == scope })
+    }
+
+    private func remoteLLMBadgeText(for provider: RemoteLLMProvider) -> String? {
+        let scopes: [ConfigurationTransferManager.MissingConfigurationIssue.Scope] = [
+            .remoteLLMProvider(provider),
+            .translationRemoteLLM(provider),
+            .rewriteRemoteLLM(provider)
+        ]
+        return missingConfigurationIssues.contains(where: { scopes.contains($0.scope) }) ? String(localized: "Needs Setup") : nil
+    }
+
+    private func customLLMBadgeText(for repo: String) -> String? {
+        let scopes: [ConfigurationTransferManager.MissingConfigurationIssue.Scope] = [
+            .customLLMModel(repo),
+            .translationCustomLLM(repo),
+            .rewriteCustomLLM(repo)
+        ]
+        return missingConfigurationIssues.contains(where: { scopes.contains($0.scope) }) ? String(localized: "Needs Setup") : nil
     }
 
     private func useModel(_ repo: String) {

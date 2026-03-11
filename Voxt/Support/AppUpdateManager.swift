@@ -88,6 +88,16 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
         let nsError = error as NSError
+        if isNoUpdateFoundError(nsError) {
+            setUpdateState(hasUpdate: false, latestVersion: nil, issue: nil, downloadedURL: nil)
+            VoxtLog.info(
+                """
+                Sparkle update abort treated as no-update result. source=\(lastCheckSource.description), \
+                domain=\(nsError.domain), code=\(nsError.code), description=\(nsError.localizedDescription)
+                """
+            )
+            return
+        }
         let failureReason = nsError.localizedFailureReason ?? "nil"
         let underlyingErrorSummary: String
         if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
@@ -158,6 +168,17 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
         if let error {
             let nsError = error as NSError
+            if isNoUpdateFoundError(nsError) {
+                setUpdateState(hasUpdate: false, latestVersion: nil, issue: nil, downloadedURL: nil)
+                VoxtLog.info(
+                    """
+                    Sparkle finished update cycle with no-update result. source=\(lastCheckSource.description), \
+                    check=\(String(describing: updateCheck)), domain=\(nsError.domain), \
+                    code=\(nsError.code), description=\(nsError.localizedDescription)
+                    """
+                )
+                return
+            }
             reportIssue(nsError.localizedDescription)
             VoxtLog.warning(
                 """
@@ -285,6 +306,10 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         self.updateCheckIssueMessage = issue
         self.latestDownloadedUpdateURL = downloadedURL
         NotificationCenter.default.post(name: .voxtUpdateAvailabilityDidChange, object: nil)
+    }
+
+    private func isNoUpdateFoundError(_ error: NSError) -> Bool {
+        error.domain == SUSparkleErrorDomain && error.code == 1001
     }
 }
 

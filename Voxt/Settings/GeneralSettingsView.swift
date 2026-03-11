@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreAudio
 import AppKit
+import UniformTypeIdentifiers
 
 struct GeneralSettingsView: View {
     let appUpdateManager: AppUpdateManager
@@ -32,6 +33,7 @@ struct GeneralSettingsView: View {
     @State private var interactionSoundPlayer = InteractionSoundPlayer()
     @State private var modelStorageDisplayPath = ""
     @State private var modelStorageSelectionError: String?
+    @State private var configurationTransferMessage: String?
 
     private var selectedInputDeviceID: AudioDeviceID {
         AudioDeviceID(selectedInputDeviceIDRaw)
@@ -53,6 +55,34 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Configuration")
+                        .font(.headline)
+
+                    HStack(spacing: 8) {
+                        Button("Export Configuration") {
+                            exportConfiguration()
+                        }
+                        Button("Import Configuration") {
+                            importConfiguration()
+                        }
+                    }
+
+                    Text("Export your current general, model, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let configurationTransferMessage {
+                        Text(configurationTransferMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+            }
+
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Audio")
@@ -485,6 +515,46 @@ struct GeneralSettingsView: View {
         modelStorageDisplayPath = resolved
         if modelStorageRootPath != resolved {
             modelStorageRootPath = resolved
+        }
+    }
+
+    private func exportConfiguration() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "Voxt-Configuration.json"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let text = try ConfigurationTransferManager.exportJSONString()
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            configurationTransferMessage = String(localized: "Configuration exported successfully.")
+        } catch {
+            configurationTransferMessage = String(format: NSLocalizedString("Configuration export failed: %@", comment: ""), error.localizedDescription)
+        }
+    }
+
+    private func importConfiguration() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            try ConfigurationTransferManager.importConfiguration(from: text)
+            let defaults = UserDefaults.standard
+            AppBehaviorController.applyDockVisibility(showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock))
+            try? AppBehaviorController.setLaunchAtLogin(defaults.bool(forKey: AppPreferenceKey.launchAtLogin))
+            NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)
+            NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
+            refreshInputDevices()
+            refreshModelStorageDisplayPath()
+            configurationTransferMessage = String(localized: "Configuration imported successfully. Sensitive fields need to be filled in again if required.")
+        } catch {
+            configurationTransferMessage = String(format: NSLocalizedString("Configuration import failed: %@", comment: ""), error.localizedDescription)
         }
     }
 }

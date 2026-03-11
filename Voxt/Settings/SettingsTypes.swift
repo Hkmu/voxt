@@ -3,6 +3,7 @@ import SwiftUI
 extension Notification.Name {
     static let voxtSettingsSelectTab = Notification.Name("voxt.settings.selectTab")
     static let voxtInterfaceLanguageDidChange = Notification.Name("voxt.interfaceLanguage.didChange")
+    static let voxtConfigurationDidImport = Notification.Name("voxt.configuration.didImport")
 }
 
 enum SettingsTab: String, CaseIterable, Identifiable {

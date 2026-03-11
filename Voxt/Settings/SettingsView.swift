@@ -3,6 +3,7 @@ import AppKit
 import AVFoundation
 import Speech
 import ApplicationServices
+import Combine
 
 struct SettingsView: View {
     @ObservedObject var mlxModelManager: MLXModelManager
@@ -13,8 +14,10 @@ struct SettingsView: View {
     @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
     @State private var selectedTab: SettingsTab
     @State private var hasMissingPermissions = false
+    @State private var missingModelConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue] = []
     @State private var languageRefreshToken = UUID()
     @State private var updateBadgeAlertMessage: String?
+    private let issueRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
     init(
         mlxModelManager: MLXModelManager,
@@ -40,9 +43,13 @@ struct SettingsView: View {
                     selectedTab: $selectedTab,
                     appEnhancementEnabled: appEnhancementEnabled,
                     hasMissingPermissions: hasMissingPermissions,
+                    hasMissingModelConfigurationIssues: !missingModelConfigurationIssues.isEmpty,
                     updateBadgeState: updateBadgeState,
                     onTapPermissionBadge: {
                         selectedTab = .permissions
+                    },
+                    onTapModelBadge: {
+                        selectedTab = .model
                     },
                     onTapUpdateBadge: {
                         presentUpdateBadgeDetails()
@@ -71,9 +78,11 @@ struct SettingsView: View {
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             refreshPermissionBadge()
+            refreshModelConfigurationBadge()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionBadge()
+            refreshModelConfigurationBadge()
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtSettingsSelectTab)) { notification in
             guard let rawValue = notification.userInfo?["tab"] as? String,
@@ -85,6 +94,13 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtInterfaceLanguageDidChange)) { _ in
             languageRefreshToken = UUID()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
+            refreshPermissionBadge()
+            refreshModelConfigurationBadge()
+        }
+        .onReceive(issueRefreshTimer) { _ in
+            refreshModelConfigurationBadge()
         }
         .onChange(of: appEnhancementEnabled) { _, isEnabled in
             if !isEnabled, selectedTab == .appEnhancement {
@@ -162,7 +178,8 @@ struct SettingsView: View {
                 case .model:
                     ModelSettingsView(
                         mlxModelManager: mlxModelManager,
-                        customLLMManager: customLLMManager
+                        customLLMManager: customLLMManager,
+                        missingConfigurationIssues: missingModelConfigurationIssues
                     )
                 case .appEnhancement:
                     EmptyView()
@@ -194,6 +211,13 @@ struct SettingsView: View {
         hasMissingPermissions = !(microphoneGranted && speechGranted && accessibilityGranted && inputMonitoringGranted)
     }
 
+    private func refreshModelConfigurationBadge() {
+        missingModelConfigurationIssues = ConfigurationTransferManager.missingConfigurationIssues(
+            mlxModelManager: mlxModelManager,
+            customLLMManager: customLLMManager
+        )
+    }
+
     private func presentUpdateBadgeDetails() {
         switch updateBadgeState {
         case .checkFailed(let issue):
@@ -217,8 +241,10 @@ private struct SettingsSidebar: View {
     @Binding var selectedTab: SettingsTab
     let appEnhancementEnabled: Bool
     let hasMissingPermissions: Bool
+    let hasMissingModelConfigurationIssues: Bool
     let updateBadgeState: UpdateBadgeState
     let onTapPermissionBadge: () -> Void
+    let onTapModelBadge: () -> Void
     let onTapUpdateBadge: () -> Void
 
     var body: some View {
@@ -269,6 +295,31 @@ private struct SettingsSidebar: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if hasMissingModelConfigurationIssues {
+                Button(action: onTapModelBadge) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.orange)
+                        Text(String(localized: "Model Setup Required"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.orange)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.orange.opacity(0.10))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)

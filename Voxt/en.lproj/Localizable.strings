@@ -423,3 +423,15 @@
 "Control" = "Control";
 "Option" = "Option";
 "Command" = "Command";
+"Configuration" = "Configuration";
+"Export Configuration" = "Export Configuration";
+"Import Configuration" = "Import Configuration";
+"Export your current general, model, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import." = "Export your current general, model, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import.";
+"Configuration exported successfully." = "Configuration exported successfully.";
+"Configuration import failed: %@" = "Configuration import failed: %@";
+"Configuration export failed: %@" = "Configuration export failed: %@";
+"Configuration imported successfully. Sensitive fields need to be filled in again if required." = "Configuration imported successfully. Sensitive fields need to be filled in again if required.";
+"Model Setup Required" = "Model Setup Required";
+"Needs Setup" = "Needs Setup";
+"Model needs to be installed." = "Model needs to be installed.";
+"Configuration required." = "Configuration required.";

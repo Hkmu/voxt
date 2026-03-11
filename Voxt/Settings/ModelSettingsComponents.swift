@@ -232,6 +232,7 @@ struct ModelTableRow: Identifiable {
     let title: String
     let isActive: Bool
     let status: String
+    var badgeText: String? = nil
     var isTitleUnderlined: Bool = false
     var onTapTitle: (() -> Void)? = nil
     let actions: [ModelTableAction]
@@ -276,16 +277,11 @@ struct ModelTableView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         if let onTapTitle = row.onTapTitle {
                             Button(action: onTapTitle) {
-                                Text(row.title)
-                                    .font(.subheadline.weight(row.isActive ? .semibold : .regular))
-                                    .underline(row.isTitleUnderlined)
-                                    .foregroundStyle(row.isTitleUnderlined ? Color.accentColor : Color.primary)
+                                rowTitle(row)
                             }
                             .buttonStyle(.plain)
                         } else {
-                            Text(row.title)
-                                .font(.subheadline.weight(row.isActive ? .semibold : .regular))
-                                .underline(row.isTitleUnderlined)
+                            rowTitle(row)
                         }
                         Text(row.status)
                             .font(.caption)
@@ -310,6 +306,31 @@ struct ModelTableView: View {
                 if index < rows.count - 1 {
                     Divider()
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rowTitle(_ row: ModelTableRow) -> some View {
+        HStack(spacing: 6) {
+            Text(row.title)
+                .font(.subheadline.weight(row.isActive ? .semibold : .regular))
+                .underline(row.isTitleUnderlined)
+                .foregroundStyle(row.isTitleUnderlined ? Color.accentColor : Color.primary)
+            if let badgeText = row.badgeText {
+                Text(badgeText)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(Color.orange.opacity(0.14))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+                    )
             }
         }
     }
