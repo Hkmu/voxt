@@ -6,7 +6,7 @@
 
 A macOS menu bar voice input and translation app. Hold to speak, release to paste. <br>AI transcription with different rules for different apps and URLs.
 
-**English** · [简体中文](./docs/README.zh-CN.md) · [Report Issues][github-issues-link] · [Prompt][./Prompt.md]
+**English** · [简体中文](./docs/README.zh-CN.md) · [Report Issues][github-issues-link] · [Prompt](./docs/Prompt.md)
 
 [![][github-release-shield]][github-release-link]
 [![][macos-version-shield]][macos-version-link]

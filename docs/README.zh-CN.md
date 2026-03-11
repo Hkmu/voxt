@@ -6,7 +6,7 @@
 
 macOS 菜单栏语音输入与翻译工具。按住说话，松开即贴，AI转写，不同 APP、URL 不同规则。
 
-[English](./README.md) · **简体中文** · [反馈问题][github-issues-link] · [提示词][./Prompt.zh-CN.md]
+[English](./README.md) · **简体中文** · [反馈问题][github-issues-link] · [提示词](./Prompt.zh-CN.md)
 
 [![][github-release-shield]][github-release-link]
 [![][macos-version-shield]][macos-version-link]
