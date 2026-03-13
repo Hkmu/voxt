@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-03-13
+
+### Added
+- Added configurable voice end commands in Hotkey settings with presets for `over`, `end`, `完毕`, plus custom command text.
+- Added automatic stop from spoken end commands when the command appears at the transcript tail and is followed by about 1 second of silence.
+- Added feedback entry points in the About tab and status bar menu, both linked to the GitHub issue chooser.
+
+### Changed
+- Updated the About tab tagline to `Voice to Thought` with localized Simplified Chinese copy `思想之声`.
+- Refactored voice end command handling into focused recording/session and settings components to reduce coupling across `AppDelegate` and settings views.
+- Simplified remote ASR stop flows and session task cleanup by extracting reusable helpers for streaming shutdown and recording lifecycle control.
+
+### Fixed
+- Fixed trailing end-command matching so surrounding punctuation, including Asian punctuation such as `，。！？`, is ignored reliably.
+- Fixed final transcription output so spoken control commands are stripped from committed text, including when the user manually stops after the command.
+- Fixed remote ASR file-recording shutdown to release the microphone capture object immediately after stop instead of holding it until upload/transcription completes.
+
 ## [1.4.8] - 2026-03-11
 
 ### Added
