@@ -41,6 +41,8 @@ struct HotkeySettingsView: View {
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
 
     @State private var recordingField: RecordingField?
+    @State private var pendingCapturedField: RecordingField?
+    @State private var pendingCapturedHotkey: HotkeyPreference.Hotkey?
 
     private var hotkeyBinding: Binding<UInt16> {
         Binding(
@@ -147,84 +149,6 @@ struct HotkeySettingsView: View {
         )
     }
 
-    private var activeKeyCodeBinding: Binding<UInt16> {
-        Binding(
-            get: {
-                switch recordingField {
-                case .translation:
-                    return UInt16(translationHotkeyKeyCode)
-                case .rewrite:
-                    return UInt16(rewriteHotkeyKeyCode)
-                default:
-                    return UInt16(hotkeyKeyCode)
-                }
-            },
-            set: { newValue in
-                switch recordingField {
-                case .translation:
-                    translationHotkeyKeyCode = Int(newValue)
-                case .rewrite:
-                    rewriteHotkeyKeyCode = Int(newValue)
-                default:
-                    hotkeyKeyCode = Int(newValue)
-                }
-                hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-            }
-        )
-    }
-
-    private var activeModifierBinding: Binding<NSEvent.ModifierFlags> {
-        Binding(
-            get: {
-                switch recordingField {
-                case .translation:
-                    return NSEvent.ModifierFlags(rawValue: UInt(translationHotkeyModifiers)).intersection(.hotkeyRelevant)
-                case .rewrite:
-                    return NSEvent.ModifierFlags(rawValue: UInt(rewriteHotkeyModifiers)).intersection(.hotkeyRelevant)
-                default:
-                    return NSEvent.ModifierFlags(rawValue: UInt(hotkeyModifiers)).intersection(.hotkeyRelevant)
-                }
-            },
-            set: { newValue in
-                switch recordingField {
-                case .translation:
-                    translationHotkeyModifiers = Int(newValue.rawValue)
-                case .rewrite:
-                    rewriteHotkeyModifiers = Int(newValue.rawValue)
-                default:
-                    hotkeyModifiers = Int(newValue.rawValue)
-                }
-                hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-            }
-        )
-    }
-
-    private var activeSidedModifierBinding: Binding<SidedModifierFlags> {
-        Binding(
-            get: {
-                switch recordingField {
-                case .translation:
-                    return SidedModifierFlags(rawValue: translationHotkeySidedModifiers).filtered(by: translationModifierBinding.wrappedValue)
-                case .rewrite:
-                    return SidedModifierFlags(rawValue: rewriteHotkeySidedModifiers).filtered(by: rewriteModifierBinding.wrappedValue)
-                default:
-                    return SidedModifierFlags(rawValue: hotkeySidedModifiers).filtered(by: modifierBinding.wrappedValue)
-                }
-            },
-            set: { newValue in
-                switch recordingField {
-                case .translation:
-                    translationHotkeySidedModifiers = newValue.filtered(by: translationModifierBinding.wrappedValue).rawValue
-                case .rewrite:
-                    rewriteHotkeySidedModifiers = newValue.filtered(by: rewriteModifierBinding.wrappedValue).rawValue
-                default:
-                    hotkeySidedModifiers = newValue.filtered(by: modifierBinding.wrappedValue).rawValue
-                }
-                hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-            }
-        )
-    }
-
     private var isRecordingBinding: Binding<Bool> {
         Binding(
             get: { recordingField != nil },
@@ -297,45 +221,58 @@ struct HotkeySettingsView: View {
 
                     shortcutInput(
                         titleKey: "Transcription",
-                        hotkey: currentHotkey,
+                        hotkey: displayedHotkey(for: .transcription, current: currentHotkey),
                         isRecording: recordingField == .transcription,
-                        onFocus: { recordingField = .transcription },
+                        isPendingConfirmation: isPendingConfirmation(for: .transcription),
+                        onFocus: { beginRecording(.transcription) },
                         onReset: {
                             hotkeyBinding.wrappedValue = HotkeyPreference.defaultKeyCode
                             modifierBinding.wrappedValue = HotkeyPreference.defaultModifiers
                             sidedModifierBinding.wrappedValue = []
                             hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-                        }
+                        },
+                        onCancelPending: discardPendingCapture,
+                        onConfirmPending: confirmPendingCapture
                     )
 
                     shortcutInput(
                         titleKey: "Translation",
-                        hotkey: currentTranslationHotkey,
+                        hotkey: displayedHotkey(for: .translation, current: currentTranslationHotkey),
                         isRecording: recordingField == .translation,
-                        onFocus: { recordingField = .translation },
+                        isPendingConfirmation: isPendingConfirmation(for: .translation),
+                        onFocus: { beginRecording(.translation) },
                         onReset: {
                             translationHotkeyBinding.wrappedValue = HotkeyPreference.defaultTranslationKeyCode
                             translationModifierBinding.wrappedValue = HotkeyPreference.defaultTranslationModifiers
                             translationSidedModifierBinding.wrappedValue = []
                             hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-                        }
+                        },
+                        onCancelPending: discardPendingCapture,
+                        onConfirmPending: confirmPendingCapture
                     )
 
                     shortcutInput(
                         titleKey: "Content Rewrite",
-                        hotkey: currentRewriteHotkey,
+                        hotkey: displayedHotkey(for: .rewrite, current: currentRewriteHotkey),
                         isRecording: recordingField == .rewrite,
-                        onFocus: { recordingField = .rewrite },
+                        isPendingConfirmation: isPendingConfirmation(for: .rewrite),
+                        onFocus: { beginRecording(.rewrite) },
                         onReset: {
                             rewriteHotkeyBinding.wrappedValue = HotkeyPreference.defaultRewriteKeyCode
                             rewriteModifierBinding.wrappedValue = HotkeyPreference.defaultRewriteModifiers
                             rewriteSidedModifierBinding.wrappedValue = []
                             hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
-                        }
+                        },
+                        onCancelPending: discardPendingCapture,
+                        onConfirmPending: confirmPendingCapture
                     )
 
-                    if recordingField != nil {
+                    if recordingField != nil, pendingCapturedField != recordingField {
                         Text("Type your shortcut now. Press Esc to cancel recording.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if pendingCapturedField != nil {
+                        Text("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -377,10 +314,16 @@ struct HotkeySettingsView: View {
                     }
 
                     HotkeyRecorderView(
-                        keyCode: activeKeyCodeBinding,
-                        modifiers: activeModifierBinding,
-                        sidedModifiers: activeSidedModifierBinding,
-                        isRecording: isRecordingBinding
+                        isRecording: isRecordingBinding,
+                        onCapture: { capturedHotkey in
+                            guard let field = recordingField else { return }
+                            pendingCapturedField = field
+                            pendingCapturedHotkey = capturedHotkey
+                        },
+                        onCancelCapture: {
+                            discardPendingCapture()
+                            recordingField = nil
+                        }
                     )
                     .frame(width: 0, height: 0)
 
@@ -442,6 +385,7 @@ struct HotkeySettingsView: View {
     }
 
     private func applyPreset(_ preset: HotkeyPreference.Preset) {
+        discardPendingCapture()
         hotkeyPreset = preset.rawValue
         guard let values = HotkeyPreference.presetHotkeys(for: preset) else { return }
 
@@ -465,8 +409,11 @@ struct HotkeySettingsView: View {
         titleKey: LocalizedStringKey,
         hotkey: HotkeyPreference.Hotkey,
         isRecording: Bool,
+        isPendingConfirmation: Bool,
         onFocus: @escaping () -> Void,
-        onReset: @escaping () -> Void
+        onReset: @escaping () -> Void,
+        onCancelPending: @escaping () -> Void,
+        onConfirmPending: @escaping () -> Void
     ) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text(titleKey)
@@ -475,17 +422,57 @@ struct HotkeySettingsView: View {
             Spacer()
 
             HStack(spacing: 8) {
-                Text(isRecording ? String(localized: "Listening...") : HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: distinguishModifierSides))
+                Text(isRecording && !isPendingConfirmation ? String(localized: "Listening...") : HotkeyPreference.displayString(for: hotkey, distinguishModifierSides: distinguishModifierSides))
                     .font(.system(.body, design: .rounded))
-                    .foregroundStyle(isRecording ? .primary : .primary)
-                Spacer()
-                Button(action: onReset) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .minimumScaleFactor(0.9)
+                    .layoutPriority(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if isPendingConfirmation {
+                    Button("Cancel", action: onCancelPending)
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .frame(height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
+                        )
+                    Button("Confirm", action: onConfirmPending)
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .frame(height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.18))
+                        )
+                } else if isRecording {
+                    Button("Cancel", action: onCancelPending)
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .frame(height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
+                        )
+                } else {
+                    Button(action: onReset) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(Text("Reset shortcut"))
                 }
-                .buttonStyle(.plain)
-                .help(Text("Reset shortcut"))
             }
+            .frame(height: 16)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
@@ -494,11 +481,58 @@ struct HotkeySettingsView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(isRecording ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: isRecording ? 2 : 1)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
             )
             .contentShape(Rectangle())
             .onTapGesture(perform: onFocus)
             .frame(width: 320, alignment: .trailing)
         }
+    }
+
+    private func beginRecording(_ field: RecordingField) {
+        pendingCapturedField = nil
+        pendingCapturedHotkey = nil
+        recordingField = field
+    }
+
+    private func isPendingConfirmation(for field: RecordingField) -> Bool {
+        pendingCapturedField == field && pendingCapturedHotkey != nil
+    }
+
+    private func displayedHotkey(for field: RecordingField, current: HotkeyPreference.Hotkey) -> HotkeyPreference.Hotkey {
+        guard pendingCapturedField == field, let pendingCapturedHotkey else {
+            return current
+        }
+        return pendingCapturedHotkey
+    }
+
+    private func discardPendingCapture() {
+        pendingCapturedField = nil
+        pendingCapturedHotkey = nil
+        recordingField = nil
+    }
+
+    private func confirmPendingCapture() {
+        guard let field = pendingCapturedField, let hotkey = pendingCapturedHotkey else { return }
+
+        switch field {
+        case .transcription:
+            hotkeyBinding.wrappedValue = hotkey.keyCode
+            modifierBinding.wrappedValue = hotkey.modifiers
+            sidedModifierBinding.wrappedValue = hotkey.sidedModifiers
+        case .translation:
+            translationHotkeyBinding.wrappedValue = hotkey.keyCode
+            translationModifierBinding.wrappedValue = hotkey.modifiers
+            translationSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
+        case .rewrite:
+            rewriteHotkeyBinding.wrappedValue = hotkey.keyCode
+            rewriteModifierBinding.wrappedValue = hotkey.modifiers
+            rewriteSidedModifierBinding.wrappedValue = hotkey.sidedModifiers
+        }
+
+        hotkeyPreset = HotkeyPreference.Preset.custom.rawValue
+        pendingCapturedField = nil
+        pendingCapturedHotkey = nil
+        recordingField = nil
     }
 }

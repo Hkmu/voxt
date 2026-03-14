@@ -31,6 +31,7 @@ enum AppPreferenceKey {
     static let hotkeyTriggerMode = "hotkeyTriggerMode"
     static let hotkeyDistinguishModifierSides = "hotkeyDistinguishModifierSides"
     static let hotkeyPreset = "hotkeyPreset"
+    static let hotkeyCaptureInProgress = "hotkeyCaptureInProgress"
     static let selectedInputDeviceID = "selectedInputDeviceID"
     static let interactionSoundsEnabled = "interactionSoundsEnabled"
     static let interactionSoundPreset = "interactionSoundPreset"

@@ -168,6 +168,9 @@ class HotkeyManager {
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) {
+        guard !UserDefaults.standard.bool(forKey: AppPreferenceKey.hotkeyCaptureInProgress) else {
+            return
+        }
         let transcriptionHotkey = HotkeyPreference.load()
         let translationHotkey = HotkeyPreference.loadTranslation()
         let rewriteHotkey = HotkeyPreference.loadRewrite()
