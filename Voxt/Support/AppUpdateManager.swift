@@ -23,10 +23,13 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
     private let betaFeedURLString = "https://voxt.actnow.dev/updates/beta/appcast.xml"
     private let betaFeedEnableEnvKey = "VOXT_ENABLE_BETA_UPDATES"
     private var lastCheckSource: CheckSource = .automatic
+    private var isPresentingUpdateUI = false
     @Published private(set) var hasUpdate = false
     @Published private(set) var latestVersion: String?
     @Published private(set) var updateCheckIssueMessage: String?
     private var latestDownloadedUpdateURL: URL?
+    var onUpdatePresentationWillBegin: (() -> Void)?
+    var onUpdatePresentationDidEnd: (() -> Void)?
     private lazy var sparkleIsAvailable: Bool = {
         let bundle = Bundle.main
         let shortVersion = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)?
@@ -69,6 +72,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         }
         switch source {
         case .manual:
+            NSApp.activate(ignoringOtherApps: true)
             VoxtLog.info("Manual update check triggered via Sparkle background mode.")
             updaterController.updater.checkForUpdatesInBackground()
         case .automatic:
@@ -114,6 +118,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
             """
         )
         reportIssue(nsError.localizedDescription)
+        finishUpdatePresentationIfNeeded()
         handleInstallerFailureIfNeeded(nsError)
     }
 
@@ -193,14 +198,21 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
                 "Sparkle finished update cycle successfully. source=\(lastCheckSource.description), check=\(String(describing: updateCheck))"
             )
         }
+        finishUpdatePresentationIfNeeded()
     }
 
     func standardUserDriverWillShowModalAlert() {
+        beginUpdatePresentationIfNeeded(reason: "modal alert")
         VoxtLog.info("Sparkle will show modal alert.")
     }
 
     func standardUserDriverDidShowModalAlert() {
         VoxtLog.info("Sparkle did show modal alert.")
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        VoxtLog.info("Sparkle will finish update session.")
+        finishUpdatePresentationIfNeeded()
     }
 
     private var selectedFeedURLString: String {
@@ -310,6 +322,20 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
 
     private func isNoUpdateFoundError(_ error: NSError) -> Bool {
         error.domain == SUSparkleErrorDomain && error.code == 1001
+    }
+
+    private func beginUpdatePresentationIfNeeded(reason: String) {
+        guard !isPresentingUpdateUI else { return }
+        isPresentingUpdateUI = true
+        VoxtLog.info("Sparkle update UI became active. reason=\(reason), source=\(lastCheckSource.description)")
+        onUpdatePresentationWillBegin?()
+    }
+
+    private func finishUpdatePresentationIfNeeded() {
+        guard isPresentingUpdateUI else { return }
+        isPresentingUpdateUI = false
+        VoxtLog.info("Sparkle update UI finished. source=\(lastCheckSource.description)")
+        onUpdatePresentationDidEnd?()
     }
 }
 

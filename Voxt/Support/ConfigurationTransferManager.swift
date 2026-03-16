@@ -33,6 +33,7 @@ enum ConfigurationTransferManager {
         var exportedAt: String
         var general: GeneralSettings
         var model: ModelSettings
+        var dictionary: DictionarySettings?
         var appBranch: AppBranchSettings
         var hotkey: HotkeySettings
     }
@@ -290,6 +291,53 @@ enum ConfigurationTransferManager {
         var customBrowsersJSON: String
     }
 
+    struct DictionarySettings: Codable {
+        var recognitionEnabled: Bool
+        var autoLearningEnabled: Bool
+        var highConfidenceCorrectionEnabled: Bool
+        var suggestionFilterSettings: DictionarySuggestionFilterSettings
+        var entries: [DictionaryEntry]
+        var suggestions: [DictionarySuggestion]
+
+        private enum CodingKeys: String, CodingKey {
+            case recognitionEnabled
+            case autoLearningEnabled
+            case highConfidenceCorrectionEnabled
+            case suggestionFilterSettings
+            case entries
+            case suggestions
+        }
+
+        init(
+            recognitionEnabled: Bool,
+            autoLearningEnabled: Bool,
+            highConfidenceCorrectionEnabled: Bool,
+            suggestionFilterSettings: DictionarySuggestionFilterSettings,
+            entries: [DictionaryEntry],
+            suggestions: [DictionarySuggestion]
+        ) {
+            self.recognitionEnabled = recognitionEnabled
+            self.autoLearningEnabled = autoLearningEnabled
+            self.highConfidenceCorrectionEnabled = highConfidenceCorrectionEnabled
+            self.suggestionFilterSettings = suggestionFilterSettings
+            self.entries = entries
+            self.suggestions = suggestions
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            recognitionEnabled = try container.decode(Bool.self, forKey: .recognitionEnabled)
+            autoLearningEnabled = try container.decode(Bool.self, forKey: .autoLearningEnabled)
+            highConfidenceCorrectionEnabled = try container.decode(Bool.self, forKey: .highConfidenceCorrectionEnabled)
+            suggestionFilterSettings = try container.decodeIfPresent(
+                DictionarySuggestionFilterSettings.self,
+                forKey: .suggestionFilterSettings
+            ) ?? .defaultValue
+            entries = try container.decodeIfPresent([DictionaryEntry].self, forKey: .entries) ?? []
+            suggestions = try container.decodeIfPresent([DictionarySuggestion].self, forKey: .suggestions) ?? []
+        }
+    }
+
     struct HotkeySettings: Codable {
         var hotkeyKeyCode: Int
         var hotkeyModifiers: Int
@@ -496,7 +544,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 1,
+            version: 4,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -519,6 +567,14 @@ enum ConfigurationTransferManager {
                 useHfMirror: defaults.bool(forKey: AppPreferenceKey.useHfMirror),
                 remoteASRProviderConfigurations: sanitizeRemoteConfigurations(defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? ""),
                 remoteLLMProviderConfigurations: sanitizeRemoteConfigurations(defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "")
+            ),
+            dictionary: .init(
+                recognitionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) as? Bool ?? true,
+                autoLearningEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true,
+                highConfidenceCorrectionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) as? Bool ?? true,
+                suggestionFilterSettings: loadDictionarySuggestionFilterSettings(defaults: defaults),
+                entries: loadDictionaryEntries(),
+                suggestions: loadDictionarySuggestions()
             ),
             appBranch: .init(
                 appEnhancementEnabled: defaults.bool(forKey: AppPreferenceKey.appEnhancementEnabled),
@@ -546,6 +602,7 @@ enum ConfigurationTransferManager {
     private static func apply(payload: ExportPayload, defaults: UserDefaults) {
         let general = payload.general
         let model = payload.model
+        let dictionary = payload.dictionary
         let appBranch = payload.appBranch
         let hotkey = payload.hotkey
 
@@ -596,6 +653,17 @@ enum ConfigurationTransferManager {
         defaults.set(model.useHfMirror, forKey: AppPreferenceKey.useHfMirror)
         defaults.set(restoreRemoteConfigurations(model.remoteASRProviderConfigurations), forKey: AppPreferenceKey.remoteASRProviderConfigurations)
         defaults.set(restoreRemoteConfigurations(model.remoteLLMProviderConfigurations), forKey: AppPreferenceKey.remoteLLMProviderConfigurations)
+
+        if let dictionary {
+            defaults.set(dictionary.recognitionEnabled, forKey: AppPreferenceKey.dictionaryRecognitionEnabled)
+            defaults.set(dictionary.autoLearningEnabled, forKey: AppPreferenceKey.dictionaryAutoLearningEnabled)
+            defaults.set(dictionary.highConfidenceCorrectionEnabled, forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled)
+            if let suggestionFilterData = try? JSONEncoder().encode(dictionary.suggestionFilterSettings.sanitized()) {
+                defaults.set(suggestionFilterData, forKey: AppPreferenceKey.dictionarySuggestionFilterSettings)
+            }
+            persistDictionaryEntries(dictionary.entries)
+            persistDictionarySuggestions(dictionary.suggestions)
+        }
 
         defaults.set(appBranch.appEnhancementEnabled, forKey: AppPreferenceKey.appEnhancementEnabled)
         if let groupsData = try? JSONEncoder().encode(appBranch.groups.map {
@@ -693,6 +761,68 @@ enum ConfigurationTransferManager {
         return urls.map { ExportedBranchURLItem(id: $0.id, pattern: $0.pattern, iconPlaceholder: "url-icon-placeholder") }
     }
 
+    private static func loadDictionaryEntries() -> [DictionaryEntry] {
+        guard let url = try? dictionaryFileURL(),
+              let data = try? Data(contentsOf: url),
+              let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data)
+        else {
+            return []
+        }
+        return entries
+    }
+
+    private static func loadDictionarySuggestionFilterSettings(
+        defaults: UserDefaults
+    ) -> DictionarySuggestionFilterSettings {
+        guard
+            let data = defaults.data(forKey: AppPreferenceKey.dictionarySuggestionFilterSettings),
+            let settings = try? JSONDecoder().decode(DictionarySuggestionFilterSettings.self, from: data)
+        else {
+            return .defaultValue
+        }
+        return settings.sanitized()
+    }
+
+    private static func persistDictionaryEntries(_ entries: [DictionaryEntry]) {
+        guard let url = try? dictionaryFileURL(),
+              let data = try? JSONEncoder().encode(entries)
+        else {
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            // Ignore config import dictionary persistence failures.
+        }
+    }
+
+    private static func loadDictionarySuggestions() -> [DictionarySuggestion] {
+        guard let url = try? dictionarySuggestionsFileURL(),
+              let data = try? Data(contentsOf: url),
+              let suggestions = try? JSONDecoder().decode([DictionarySuggestion].self, from: data)
+        else {
+            return []
+        }
+        return suggestions
+    }
+
+    private static func persistDictionarySuggestions(_ suggestions: [DictionarySuggestion]) {
+        guard let url = try? dictionarySuggestionsFileURL(),
+              let data = try? JSONEncoder().encode(suggestions)
+        else {
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            // Ignore config import dictionary persistence failures.
+        }
+    }
+
     private static func sanitizeSensitive(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : sensitivePlaceholder
     }
@@ -700,5 +830,29 @@ enum ConfigurationTransferManager {
     private static func resolveImportedSensitive(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed == sensitivePlaceholder ? "" : trimmed
+    }
+
+    private static func dictionaryFileURL() throws -> URL {
+        let appSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return appSupport
+            .appendingPathComponent("Voxt", isDirectory: true)
+            .appendingPathComponent("dictionary.json")
+    }
+
+    private static func dictionarySuggestionsFileURL() throws -> URL {
+        let appSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return appSupport
+            .appendingPathComponent("Voxt", isDirectory: true)
+            .appendingPathComponent("dictionary-suggestions.json")
     }
 }

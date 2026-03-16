@@ -19,7 +19,8 @@ extension AppDelegate {
     func resolveGlobalEnhancementPromptTemplate(_ prompt: String, rawTranscription: String) -> String {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else { return AppPreferenceKey.defaultEnhancementPrompt }
-        return resolveEnhancementPromptVariables(in: trimmedPrompt, rawTranscription: rawTranscription)
+        let resolved = resolveEnhancementPromptVariables(in: trimmedPrompt, rawTranscription: rawTranscription)
+        return appendDictionaryEnhancementGlossary(to: resolved, sourceText: rawTranscription)
     }
 
     func resolvedGlobalEnhancementPrompt() -> String {
@@ -59,6 +60,7 @@ extension AppDelegate {
             guard let normalizedActiveURL else {
                 lastEnhancementPromptContext = EnhancementPromptContext(
                     focusedAppName: focusedAppName,
+                    matchedGroupID: nil,
                     matchedAppGroupName: nil,
                     matchedURLGroupName: nil
                 )
@@ -69,18 +71,23 @@ extension AppDelegate {
             if let match = firstURLPromptMatch(groups: groups, urlsByID: urlsByID, normalizedURL: normalizedActiveURL) {
                 lastEnhancementPromptContext = EnhancementPromptContext(
                     focusedAppName: focusedAppName,
+                    matchedGroupID: match.groupID,
                     matchedAppGroupName: nil,
                     matchedURLGroupName: match.groupName
                 )
                 VoxtLog.info("Enhancement prompt source: group(url) group=\(match.groupName), pattern=\(match.pattern), url=\(normalizedActiveURL)")
                 return EnhancementPromptResolution(
-                    content: resolveEnhancementPromptVariables(in: match.prompt, rawTranscription: rawTranscription),
+                    content: appendDictionaryEnhancementGlossary(
+                        to: resolveEnhancementPromptVariables(in: match.prompt, rawTranscription: rawTranscription),
+                        sourceText: rawTranscription
+                    ),
                     delivery: .userMessage
                 )
             }
 
             lastEnhancementPromptContext = EnhancementPromptContext(
                 focusedAppName: focusedAppName,
+                matchedGroupID: nil,
                 matchedAppGroupName: nil,
                 matchedURLGroupName: nil
             )
@@ -94,12 +101,16 @@ extension AppDelegate {
                 if !prompt.isEmpty {
                     lastEnhancementPromptContext = EnhancementPromptContext(
                         focusedAppName: focusedAppName,
+                        matchedGroupID: group.id,
                         matchedAppGroupName: group.name,
                         matchedURLGroupName: nil
                     )
                     VoxtLog.info("Enhancement prompt source: group(app) group=\(group.name), bundleID=\(frontmostBundleID)")
                     return EnhancementPromptResolution(
-                        content: resolveEnhancementPromptVariables(in: prompt, rawTranscription: rawTranscription),
+                        content: appendDictionaryEnhancementGlossary(
+                            to: resolveEnhancementPromptVariables(in: prompt, rawTranscription: rawTranscription),
+                            sourceText: rawTranscription
+                        ),
                         delivery: .userMessage
                     )
                 }
@@ -108,6 +119,7 @@ extension AppDelegate {
 
         lastEnhancementPromptContext = EnhancementPromptContext(
             focusedAppName: focusedAppName,
+            matchedGroupID: nil,
             matchedAppGroupName: nil,
             matchedURLGroupName: nil
         )
@@ -123,11 +135,37 @@ extension AppDelegate {
         )
     }
 
+    func currentDictionaryScope() -> (groupID: UUID?, groupName: String?) {
+        let groups = loadAppBranchGroups()
+        guard !groups.isEmpty else { return (nil, nil) }
+
+        let urlsByID = loadAppBranchURLsByID()
+        let context = currentEnhancementContext()
+        let frontmostBundleID = context.bundleID
+
+        if isBrowserBundleID(frontmostBundleID) {
+            let activeURL = activeBrowserTabURL(frontmostBundleID: frontmostBundleID)
+            guard let normalizedActiveURL = normalizedURLForMatching(activeURL) else {
+                return (nil, nil)
+            }
+            if let match = firstURLGroupMatch(groups: groups, urlsByID: urlsByID, normalizedURL: normalizedActiveURL) {
+                return (match.groupID, match.groupName)
+            }
+            return (nil, nil)
+        }
+
+        guard let frontmostBundleID else { return (nil, nil) }
+        if let group = groups.first(where: { $0.appBundleIDs.contains(frontmostBundleID) }) {
+            return (group.id, group.name)
+        }
+        return (nil, nil)
+    }
+
     private func firstURLPromptMatch(
         groups: [StoredAppBranchGroup],
         urlsByID: [UUID: String],
         normalizedURL: String
-    ) -> (prompt: String, groupName: String, pattern: String)? {
+    ) -> (groupID: UUID, prompt: String, groupName: String, pattern: String)? {
         for group in groups {
             for urlID in group.urlPatternIDs {
                 guard let pattern = urlsByID[urlID], wildcardMatches(pattern: pattern, candidate: normalizedURL) else {
@@ -135,8 +173,24 @@ extension AppDelegate {
                 }
                 let prompt = group.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !prompt.isEmpty {
-                    return (prompt, group.name, pattern)
+                    return (group.id, prompt, group.name, pattern)
                 }
+            }
+        }
+        return nil
+    }
+
+    private func firstURLGroupMatch(
+        groups: [StoredAppBranchGroup],
+        urlsByID: [UUID: String],
+        normalizedURL: String
+    ) -> (groupID: UUID, groupName: String)? {
+        for group in groups {
+            for urlID in group.urlPatternIDs {
+                guard let pattern = urlsByID[urlID], wildcardMatches(pattern: pattern, candidate: normalizedURL) else {
+                    continue
+                }
+                return (group.id, group.name)
             }
         }
         return nil

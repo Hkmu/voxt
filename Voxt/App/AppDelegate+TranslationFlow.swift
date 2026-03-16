@@ -421,13 +421,20 @@ extension AppDelegate {
             - Do not output explanations.
             - Return only the translated text.
             """
-        return "\(basePrompt)\n\(enforcement)"
+        return appendDictionaryTranslationGlossary(
+            to: "\(basePrompt)\n\(enforcement)",
+            sourceText: sourceText
+        )
     }
 
     private func resolvedRewritePrompt(dictatedPrompt: String, sourceText: String) -> String {
-        rewriteSystemPrompt
+        let resolved = rewriteSystemPrompt
             .replacingOccurrences(of: "{{DICTATED_PROMPT}}", with: dictatedPrompt)
             .replacingOccurrences(of: "{{SOURCE_TEXT}}", with: sourceText)
+        return appendDictionaryRewriteGlossary(
+            to: resolved,
+            sourceText: "\(dictatedPrompt)\n\(sourceText)"
+        )
     }
 
     private func processSelectedTextTranslation(_ text: String) {

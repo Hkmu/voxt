@@ -10,6 +10,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case report
     case model
+    case dictionary
     case appEnhancement
     case history
     case permissions
@@ -25,6 +26,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "History"
         case .report: return "Report"
         case .model: return "Model"
+        case .dictionary: return "Dictionary"
         case .appEnhancement: return "App Branch"
         case .hotkey: return "Hotkey"
         case .about: return "About"
@@ -40,6 +42,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "History"
         case .report: return "Report"
         case .model: return "Model"
+        case .dictionary: return "Dictionary"
         case .appEnhancement: return "App Branch"
         case .hotkey: return "Hotkey"
         case .about: return "About"
@@ -53,6 +56,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "clock.arrow.circlepath"
         case .report: return "chart.bar"
         case .model: return "waveform"
+        case .dictionary: return "book.closed"
         case .appEnhancement: return "sparkles.rectangle.stack"
         case .hotkey: return "keyboard"
         case .about: return "info.circle"

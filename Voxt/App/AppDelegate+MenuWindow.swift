@@ -18,6 +18,14 @@ extension AppDelegate {
         reportItem.target = self
         menu.addItem(reportItem)
 
+        let dictionaryItem = NSMenuItem(
+            title: AppLocalization.localizedString("Dictionary"),
+            action: #selector(openDictionarySettings),
+            keyEquivalent: ""
+        )
+        dictionaryItem.target = self
+        menu.addItem(dictionaryItem)
+
         let microphoneItem = NSMenuItem(title: AppLocalization.localizedString("Microphone"), action: nil, keyEquivalent: "")
         microphoneItem.submenu = buildMicrophoneMenu()
         menu.addItem(microphoneItem)
@@ -97,21 +105,35 @@ extension AppDelegate {
     }
 
     @objc private func checkForUpdates() {
-        VoxtLog.info("Manual update check triggered from menu.")
-        appUpdateManager.checkForUpdates(source: .manual)
+        performAfterStatusMenuDismissal {
+            VoxtLog.info("Manual update check triggered from menu.")
+            self.appUpdateManager.checkForUpdates(source: .manual)
+        }
     }
 
     @objc private func openFeedbackPage() {
-        VoxtLog.info("Feedback page opened from menu.")
-        NSWorkspace.shared.open(feedbackURL)
+        performAfterStatusMenuDismissal {
+            VoxtLog.info("Feedback page opened from menu.")
+            NSWorkspace.shared.open(self.feedbackURL)
+        }
     }
 
     @objc private func openSettings() {
-        openSettingsWindow(selectTab: nil)
+        performAfterStatusMenuDismissal {
+            self.openSettingsWindow(selectTab: nil)
+        }
     }
 
     @objc private func openReportSettings() {
-        openSettingsWindow(selectTab: .report)
+        performAfterStatusMenuDismissal {
+            self.openSettingsWindow(selectTab: .report)
+        }
+    }
+
+    @objc private func openDictionarySettings() {
+        performAfterStatusMenuDismissal {
+            self.openSettingsWindow(selectTab: .dictionary)
+        }
     }
 
     @objc private func selectMicrophoneFromMenu(_ sender: NSMenuItem) {
@@ -127,14 +149,19 @@ extension AppDelegate {
                     userInfo: ["tab": selectTab.rawValue]
                 )
             }
-            centerAndBringWindowToFront(window)
+            bringWindowToFront(window)
             return
         }
 
         let contentView = SettingsView(
+            onIngestDictionarySuggestionsFromHistory: {
+                self.startDictionaryHistorySuggestionScan()
+            },
             mlxModelManager: mlxModelManager,
             customLLMManager: customLLMManager,
             historyStore: historyStore,
+            dictionaryStore: dictionaryStore,
+            dictionarySuggestionStore: dictionarySuggestionStore,
             appUpdateManager: appUpdateManager,
             initialTab: selectTab ?? .general
         )
@@ -163,28 +190,29 @@ extension AppDelegate {
         let controller = NSWindowController(window: window)
         controller.shouldCascadeWindows = false
         settingsWindowController = controller
-        window.center()
         controller.showWindow(nil)
-        positionWindowTrafficLightButtons(window)
 
         DispatchQueue.main.async { [weak self, weak window] in
             guard let self, let window else { return }
+            window.center()
             self.positionWindowTrafficLightButtons(window)
+            self.bringWindowToFront(window)
         }
-
-        bringWindowToFront(window)
     }
 
     private func bringWindowToFront(_ window: NSWindow) {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        positionWindowTrafficLightButtons(window)
     }
 
-    private func centerAndBringWindowToFront(_ window: NSWindow) {
-        window.center()
-        bringWindowToFront(window)
-        positionWindowTrafficLightButtons(window)
+    private func performAfterStatusMenuDismissal(_ action: @escaping @MainActor () -> Void) {
+        DispatchQueue.main.async {
+            Task { @MainActor in
+                action()
+            }
+        }
     }
 
     private func positionWindowTrafficLightButtons(_ window: NSWindow) {
@@ -219,6 +247,29 @@ extension AppDelegate {
         VoxtLog.info("Quit requested from menu.")
         hotkeyManager.stop()
         NSApp.terminate(nil)
+    }
+
+    func prepareSettingsWindowForUpdatePresentation() {
+        guard let window = settingsWindowController?.window else {
+            settingsWindowPresentationState = SettingsWindowPresentationState()
+            return
+        }
+
+        let shouldRestore = window.isVisible && !window.isMiniaturized
+        settingsWindowPresentationState.shouldRestoreAfterUpdate = shouldRestore
+        guard shouldRestore else { return }
+
+        VoxtLog.info("Temporarily hiding settings window before presenting update UI.")
+        window.orderOut(nil)
+    }
+
+    func restoreSettingsWindowAfterUpdateSessionIfNeeded() {
+        guard settingsWindowPresentationState.shouldRestoreAfterUpdate else { return }
+        settingsWindowPresentationState = SettingsWindowPresentationState()
+
+        guard let window = settingsWindowController?.window else { return }
+        VoxtLog.info("Restoring settings window after update UI finished.")
+        bringWindowToFront(window)
     }
 
     func showPermissionAlert() {

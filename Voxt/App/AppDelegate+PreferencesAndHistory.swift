@@ -153,11 +153,17 @@ extension AppDelegate {
         defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates)
     }
 
-    func appendHistoryIfNeeded(text: String, llmDurationSeconds: TimeInterval?) {
-        guard historyEnabled else { return }
+    func appendHistoryIfNeeded(
+        text: String,
+        llmDurationSeconds: TimeInterval?,
+        dictionaryHitTerms: [String],
+        dictionaryCorrectedTerms: [String],
+        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
+    ) -> UUID? {
+        guard historyEnabled else { return nil }
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return nil }
 
         let transcriptionModel: String
         switch transcriptionEngine {
@@ -231,7 +237,7 @@ extension AppDelegate {
             remoteLLMEndpointInfo = nil
         }
 
-        historyStore.append(
+        let entryID = historyStore.append(
             text: trimmed,
             transcriptionEngine: transcriptionEngine.title,
             transcriptionModel: transcriptionModel,
@@ -243,6 +249,7 @@ extension AppDelegate {
             transcriptionProcessingDurationSeconds: processingDuration,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            matchedGroupID: lastEnhancementPromptContext?.matchedGroupID,
             matchedAppGroupName: lastEnhancementPromptContext?.matchedAppGroupName,
             matchedURLGroupName: lastEnhancementPromptContext?.matchedURLGroupName,
             remoteASRProvider: remoteASRProviderInfo,
@@ -250,11 +257,15 @@ extension AppDelegate {
             remoteASREndpoint: remoteASREndpointInfo,
             remoteLLMProvider: remoteLLMProviderInfo,
             remoteLLMModel: remoteLLMModelInfo,
-            remoteLLMEndpoint: remoteLLMEndpointInfo
+            remoteLLMEndpoint: remoteLLMEndpointInfo,
+            dictionaryHitTerms: dictionaryHitTerms,
+            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+            dictionarySuggestedTerms: dictionarySuggestedTerms
         )
 
         lastEnhancementPromptContext = nil
         transcriptionResultReceivedAt = nil
+        return entryID
     }
 
     private func resolvedHistoryKind() -> TranscriptionHistoryKind {

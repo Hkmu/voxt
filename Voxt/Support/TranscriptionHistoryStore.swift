@@ -21,6 +21,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let transcriptionProcessingDurationSeconds: TimeInterval?
     let llmDurationSeconds: TimeInterval?
     let focusedAppName: String?
+    let matchedGroupID: UUID?
     let matchedAppGroupName: String?
     let matchedURLGroupName: String?
     let remoteASRProvider: String?
@@ -29,6 +30,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let remoteLLMProvider: String?
     let remoteLLMModel: String?
     let remoteLLMEndpoint: String?
+    let dictionaryHitTerms: [String]
+    let dictionaryCorrectedTerms: [String]
+    let dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -44,6 +48,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case transcriptionProcessingDurationSeconds
         case llmDurationSeconds
         case focusedAppName
+        case matchedGroupID
         case matchedAppGroupName
         case matchedURLGroupName
         case remoteASRProvider
@@ -52,6 +57,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case remoteLLMProvider
         case remoteLLMModel
         case remoteLLMEndpoint
+        case dictionaryHitTerms
+        case dictionaryCorrectedTerms
+        case dictionarySuggestedTerms
     }
 
     init(
@@ -68,6 +76,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         focusedAppName: String?,
+        matchedGroupID: UUID?,
         matchedAppGroupName: String?,
         matchedURLGroupName: String?,
         remoteASRProvider: String?,
@@ -75,7 +84,10 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         remoteASREndpoint: String?,
         remoteLLMProvider: String?,
         remoteLLMModel: String?,
-        remoteLLMEndpoint: String?
+        remoteLLMEndpoint: String?,
+        dictionaryHitTerms: [String],
+        dictionaryCorrectedTerms: [String],
+        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
     ) {
         self.id = id
         self.text = text
@@ -90,6 +102,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.transcriptionProcessingDurationSeconds = transcriptionProcessingDurationSeconds
         self.llmDurationSeconds = llmDurationSeconds
         self.focusedAppName = focusedAppName
+        self.matchedGroupID = matchedGroupID
         self.matchedAppGroupName = matchedAppGroupName
         self.matchedURLGroupName = matchedURLGroupName
         self.remoteASRProvider = remoteASRProvider
@@ -98,6 +111,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.remoteLLMProvider = remoteLLMProvider
         self.remoteLLMModel = remoteLLMModel
         self.remoteLLMEndpoint = remoteLLMEndpoint
+        self.dictionaryHitTerms = dictionaryHitTerms
+        self.dictionaryCorrectedTerms = dictionaryCorrectedTerms
+        self.dictionarySuggestedTerms = dictionarySuggestedTerms
     }
 
     init(from decoder: Decoder) throws {
@@ -117,6 +133,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         transcriptionProcessingDurationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .transcriptionProcessingDurationSeconds)
         llmDurationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .llmDurationSeconds)
         focusedAppName = try container.decodeIfPresent(String.self, forKey: .focusedAppName)
+        matchedGroupID = try container.decodeIfPresent(UUID.self, forKey: .matchedGroupID)
         matchedAppGroupName = try container.decodeIfPresent(String.self, forKey: .matchedAppGroupName)
         matchedURLGroupName = try container.decodeIfPresent(String.self, forKey: .matchedURLGroupName)
         remoteASRProvider = try container.decodeIfPresent(String.self, forKey: .remoteASRProvider)
@@ -125,6 +142,9 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         remoteLLMProvider = try container.decodeIfPresent(String.self, forKey: .remoteLLMProvider)
         remoteLLMModel = try container.decodeIfPresent(String.self, forKey: .remoteLLMModel)
         remoteLLMEndpoint = try container.decodeIfPresent(String.self, forKey: .remoteLLMEndpoint)
+        dictionaryHitTerms = try container.decodeIfPresent([String].self, forKey: .dictionaryHitTerms) ?? []
+        dictionaryCorrectedTerms = try container.decodeIfPresent([String].self, forKey: .dictionaryCorrectedTerms) ?? []
+        dictionarySuggestedTerms = try container.decodeIfPresent([DictionarySuggestionSnapshot].self, forKey: .dictionarySuggestedTerms) ?? []
     }
 }
 
@@ -191,6 +211,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         entries = Array(allEntries.prefix(loadedCount))
     }
 
+    @discardableResult
     func append(
         text: String,
         transcriptionEngine: String,
@@ -203,6 +224,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         focusedAppName: String?,
+        matchedGroupID: UUID?,
         matchedAppGroupName: String?,
         matchedURLGroupName: String?,
         remoteASRProvider: String?,
@@ -210,10 +232,13 @@ final class TranscriptionHistoryStore: ObservableObject {
         remoteASREndpoint: String?,
         remoteLLMProvider: String?,
         remoteLLMModel: String?,
-        remoteLLMEndpoint: String?
-    ) {
+        remoteLLMEndpoint: String?,
+        dictionaryHitTerms: [String],
+        dictionaryCorrectedTerms: [String],
+        dictionarySuggestedTerms: [DictionarySuggestionSnapshot]
+    ) -> UUID? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return nil }
 
         let entry = TranscriptionHistoryEntry(
             id: UUID(),
@@ -229,6 +254,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
+            matchedGroupID: matchedGroupID,
             matchedAppGroupName: matchedAppGroupName,
             matchedURLGroupName: matchedURLGroupName,
             remoteASRProvider: remoteASRProvider,
@@ -236,7 +262,10 @@ final class TranscriptionHistoryStore: ObservableObject {
             remoteASREndpoint: remoteASREndpoint,
             remoteLLMProvider: remoteLLMProvider,
             remoteLLMModel: remoteLLMModel,
-            remoteLLMEndpoint: remoteLLMEndpoint
+            remoteLLMEndpoint: remoteLLMEndpoint,
+            dictionaryHitTerms: dictionaryHitTerms,
+            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+            dictionarySuggestedTerms: dictionarySuggestedTerms
         )
 
         allEntries.insert(entry, at: 0)
@@ -248,6 +277,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         loadedCount = min(max(loadedCount + 1, pageSize), allEntries.count)
         entries = Array(allEntries.prefix(loadedCount))
         persist()
+        return entry.id
     }
 
     func delete(id: UUID) {
@@ -261,6 +291,26 @@ final class TranscriptionHistoryStore: ObservableObject {
         allEntries = []
         entries = []
         loadedCount = 0
+        persist()
+    }
+
+    func applyDictionarySuggestedTerms(_ snapshotsByHistoryID: [UUID: [DictionarySuggestionSnapshot]]) {
+        guard !snapshotsByHistoryID.isEmpty else { return }
+
+        var didChange = false
+        for (historyID, snapshots) in snapshotsByHistoryID {
+            guard let index = allEntries.firstIndex(where: { $0.id == historyID }) else { continue }
+            let merged = mergeSnapshots(
+                existing: allEntries[index].dictionarySuggestedTerms,
+                incoming: snapshots
+            )
+            guard merged != allEntries[index].dictionarySuggestedTerms else { continue }
+            allEntries[index] = allEntries[index].updatingDictionarySuggestedTerms(merged)
+            didChange = true
+        }
+
+        guard didChange else { return }
+        entries = Array(allEntries.prefix(loadedCount))
         persist()
     }
 
@@ -304,5 +354,50 @@ final class TranscriptionHistoryStore: ObservableObject {
         return appSupport
             .appendingPathComponent("Voxt", isDirectory: true)
             .appendingPathComponent("transcription-history.json")
+    }
+
+    private func mergeSnapshots(
+        existing: [DictionarySuggestionSnapshot],
+        incoming: [DictionarySuggestionSnapshot]
+    ) -> [DictionarySuggestionSnapshot] {
+        guard !incoming.isEmpty else { return existing }
+        var merged = existing
+        var seen = Set(existing.map(\.id))
+        for snapshot in incoming where seen.insert(snapshot.id).inserted {
+            merged.append(snapshot)
+        }
+        return merged
+    }
+}
+
+private extension TranscriptionHistoryEntry {
+    func updatingDictionarySuggestedTerms(_ dictionarySuggestedTerms: [DictionarySuggestionSnapshot]) -> TranscriptionHistoryEntry {
+        TranscriptionHistoryEntry(
+            id: id,
+            text: text,
+            createdAt: createdAt,
+            transcriptionEngine: transcriptionEngine,
+            transcriptionModel: transcriptionModel,
+            enhancementMode: enhancementMode,
+            enhancementModel: enhancementModel,
+            kind: kind,
+            isTranslation: isTranslation,
+            audioDurationSeconds: audioDurationSeconds,
+            transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
+            llmDurationSeconds: llmDurationSeconds,
+            focusedAppName: focusedAppName,
+            matchedGroupID: matchedGroupID,
+            matchedAppGroupName: matchedAppGroupName,
+            matchedURLGroupName: matchedURLGroupName,
+            remoteASRProvider: remoteASRProvider,
+            remoteASRModel: remoteASRModel,
+            remoteASREndpoint: remoteASREndpoint,
+            remoteLLMProvider: remoteLLMProvider,
+            remoteLLMModel: remoteLLMModel,
+            remoteLLMEndpoint: remoteLLMEndpoint,
+            dictionaryHitTerms: dictionaryHitTerms,
+            dictionaryCorrectedTerms: dictionaryCorrectedTerms,
+            dictionarySuggestedTerms: dictionarySuggestedTerms
+        )
     }
 }

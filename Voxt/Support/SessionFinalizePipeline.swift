@@ -3,6 +3,10 @@ import Foundation
 struct SessionFinalizeContext {
     var outputText: String
     let llmDurationSeconds: TimeInterval?
+    var dictionaryMatches: [DictionaryMatchCandidate]
+    var dictionaryCorrectedTerms: [String]
+    var dictionarySuggestions: [DictionarySuggestionDraft]
+    var historyEntryID: UUID?
 }
 
 protocol SessionFinalizeStage {

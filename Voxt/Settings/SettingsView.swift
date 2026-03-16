@@ -6,9 +6,12 @@ import ApplicationServices
 import Combine
 
 struct SettingsView: View {
+    let onIngestDictionarySuggestionsFromHistory: () -> Void
     @ObservedObject var mlxModelManager: MLXModelManager
     @ObservedObject var customLLMManager: CustomLLMModelManager
     @ObservedObject var historyStore: TranscriptionHistoryStore
+    @ObservedObject var dictionaryStore: DictionaryStore
+    @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     @ObservedObject var appUpdateManager: AppUpdateManager
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
     @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
@@ -21,15 +24,21 @@ struct SettingsView: View {
     private let issueRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
 
     init(
+        onIngestDictionarySuggestionsFromHistory: @escaping () -> Void,
         mlxModelManager: MLXModelManager,
         customLLMManager: CustomLLMModelManager,
         historyStore: TranscriptionHistoryStore,
+        dictionaryStore: DictionaryStore,
+        dictionarySuggestionStore: DictionarySuggestionStore,
         appUpdateManager: AppUpdateManager,
         initialTab: SettingsTab = .general
     ) {
+        self.onIngestDictionarySuggestionsFromHistory = onIngestDictionarySuggestionsFromHistory
         self.mlxModelManager = mlxModelManager
         self.customLLMManager = customLLMManager
         self.historyStore = historyStore
+        self.dictionaryStore = dictionaryStore
+        self.dictionarySuggestionStore = dictionarySuggestionStore
         self.appUpdateManager = appUpdateManager
         _selectedTab = State(initialValue: initialTab)
     }
@@ -99,6 +108,8 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
             refreshPermissionBadge()
             refreshModelConfigurationBadge()
+            dictionaryStore.reload()
+            dictionarySuggestionStore.reload()
         }
         .onReceive(issueRefreshTimer) { _ in
             refreshModelConfigurationBadge()
@@ -146,7 +157,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        if selectedTab == .history || selectedTab == .report || selectedTab == .appEnhancement {
+        if selectedTab == .history || selectedTab == .report || selectedTab == .appEnhancement || selectedTab == .dictionary {
             staticTabContent
         } else {
             scrollableTabContent
@@ -157,7 +168,18 @@ struct SettingsView: View {
     private var staticTabContent: some View {
         Group {
             if selectedTab == .history {
-                HistorySettingsView(historyStore: historyStore)
+                HistorySettingsView(
+                    historyStore: historyStore,
+                    dictionaryStore: dictionaryStore,
+                    dictionarySuggestionStore: dictionarySuggestionStore
+                )
+            } else if selectedTab == .dictionary {
+                DictionarySettingsView(
+                    historyStore: historyStore,
+                    dictionaryStore: dictionaryStore,
+                    dictionarySuggestionStore: dictionarySuggestionStore,
+                    onIngestSuggestionsFromHistory: onIngestDictionarySuggestionsFromHistory
+                )
             } else if selectedTab == .appEnhancement {
                 AppEnhancementSettingsView()
             } else {
@@ -185,6 +207,8 @@ struct SettingsView: View {
                         customLLMManager: customLLMManager,
                         missingConfigurationIssues: missingModelConfigurationIssues
                     )
+                case .dictionary:
+                    EmptyView()
                 case .appEnhancement:
                     EmptyView()
                 case .hotkey:

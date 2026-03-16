@@ -6,6 +6,8 @@ struct HistorySettingsView: View {
     @AppStorage(AppPreferenceKey.historyRetentionPeriod) private var historyRetentionPeriodRaw = HistoryRetentionPeriod.thirtyDays.rawValue
 
     @ObservedObject var historyStore: TranscriptionHistoryStore
+    @ObservedObject var dictionaryStore: DictionaryStore
+    @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     @State private var copiedEntryID: UUID?
     @State private var showRetentionInfo = false
 
@@ -53,7 +55,6 @@ struct HistorySettingsView: View {
                     Text("When enabled, each completed transcription result will be saved in local history.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
@@ -87,6 +88,8 @@ struct HistorySettingsView: View {
                                 ForEach(historyStore.entries) { entry in
                                     HistoryRow(
                                         entry: entry,
+                                        dictionaryStore: dictionaryStore,
+                                        dictionarySuggestionStore: dictionarySuggestionStore,
                                         isCopied: copiedEntryID == entry.id,
                                         onCopy: {
                                             copyToPasteboard(entry.text)
@@ -158,6 +161,8 @@ private struct HistoryRow: View {
     @Environment(\.locale) private var locale
 
     let entry: TranscriptionHistoryEntry
+    @ObservedObject var dictionaryStore: DictionaryStore
+    @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     let isCopied: Bool
     let onCopy: () -> Void
     let onDelete: () -> Void
@@ -179,6 +184,29 @@ private struct HistoryRow: View {
                         Text(metadataText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        if hasDictionaryActivity {
+                            HStack(spacing: 6) {
+                                if !entry.dictionaryHitTerms.isEmpty {
+                                    activityChip(
+                                        label: AppLocalization.format("Dictionary %d", entry.dictionaryHitTerms.count),
+                                        color: .secondary
+                                    )
+                                }
+                                if !entry.dictionaryCorrectedTerms.isEmpty {
+                                    activityChip(
+                                        label: AppLocalization.format("Corrected %d", entry.dictionaryCorrectedTerms.count),
+                                        color: .blue
+                                    )
+                                }
+                                if !entry.dictionarySuggestedTerms.isEmpty {
+                                    activityChip(
+                                        label: AppLocalization.format("Suggestions %d", entry.dictionarySuggestedTerms.count),
+                                        color: .orange
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,53 +214,77 @@ private struct HistoryRow: View {
             }
             .buttonStyle(.plain)
 
-            if isCopied {
-                Text("Copied")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            }
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: 8) {
+                    Button {
+                        showModelInfo.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showModelInfo, arrowEdge: .trailing) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Transcription Details")
+                                    .font(.headline)
+                                detailLine(labelKey: "Engine", value: entry.transcriptionEngine)
+                                detailLine(labelKey: "Model", value: entry.transcriptionModel)
+                                optionalDetailLine(labelKey: "Remote ASR Provider", value: entry.remoteASRProvider)
+                                optionalDetailLine(labelKey: "Remote ASR Model", value: entry.remoteASRModel)
+                                optionalDetailLine(labelKey: "Remote ASR Endpoint", value: entry.remoteASREndpoint)
+                                detailLine(labelKey: "Enhancement", value: entry.enhancementMode)
+                                detailLine(labelKey: "Enhancer Model", value: entry.enhancementModel)
+                                optionalDetailLine(labelKey: "Remote LLM Provider", value: entry.remoteLLMProvider)
+                                optionalDetailLine(labelKey: "Remote LLM Model", value: entry.remoteLLMModel)
+                                optionalDetailLine(labelKey: "Remote LLM Endpoint", value: entry.remoteLLMEndpoint)
+                                optionalDetailLine(labelKey: "Focused App", value: entry.focusedAppName)
+                                optionalDetailLine(labelKey: "App Group", value: entry.matchedAppGroupName)
+                                optionalDetailLine(labelKey: "URL Group", value: entry.matchedURLGroupName)
+                                optionalDetailLine(
+                                    labelKey: "ASR Processing",
+                                    value: formattedDuration(entry.transcriptionProcessingDurationSeconds)
+                                )
+                                optionalDetailLine(
+                                    labelKey: "LLM Duration",
+                                    value: formattedDuration(entry.llmDurationSeconds)
+                                )
 
-            Button {
-                showModelInfo.toggle()
-            } label: {
-                Image(systemName: "info.circle")
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showModelInfo, arrowEdge: .trailing) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Transcription Details")
-                        .font(.headline)
-                    detailLine(labelKey: "Engine", value: entry.transcriptionEngine)
-                    detailLine(labelKey: "Model", value: entry.transcriptionModel)
-                    optionalDetailLine(labelKey: "Remote ASR Provider", value: entry.remoteASRProvider)
-                    optionalDetailLine(labelKey: "Remote ASR Model", value: entry.remoteASRModel)
-                    optionalDetailLine(labelKey: "Remote ASR Endpoint", value: entry.remoteASREndpoint)
-                    detailLine(labelKey: "Enhancement", value: entry.enhancementMode)
-                    detailLine(labelKey: "Enhancer Model", value: entry.enhancementModel)
-                    optionalDetailLine(labelKey: "Remote LLM Provider", value: entry.remoteLLMProvider)
-                    optionalDetailLine(labelKey: "Remote LLM Model", value: entry.remoteLLMModel)
-                    optionalDetailLine(labelKey: "Remote LLM Endpoint", value: entry.remoteLLMEndpoint)
-                    optionalDetailLine(labelKey: "Focused App", value: entry.focusedAppName)
-                    optionalDetailLine(labelKey: "App Group", value: entry.matchedAppGroupName)
-                    optionalDetailLine(labelKey: "URL Group", value: entry.matchedURLGroupName)
-                    optionalDetailLine(
-                        labelKey: "ASR Processing",
-                        value: formattedDuration(entry.transcriptionProcessingDurationSeconds)
-                    )
-                    optionalDetailLine(
-                        labelKey: "LLM Duration",
-                        value: formattedDuration(entry.llmDurationSeconds)
-                    )
+                                if hasDictionaryActivity {
+                                    Divider()
+                                        .padding(.vertical, 2)
+                                    Text("Dictionary")
+                                        .font(.headline)
+
+                                    if !entry.dictionaryHitTerms.isEmpty {
+                                        termSection(title: "Matched dictionary terms", values: entry.dictionaryHitTerms)
+                                    }
+                                    if !entry.dictionaryCorrectedTerms.isEmpty {
+                                        termSection(title: "Corrected terms", values: entry.dictionaryCorrectedTerms)
+                                    }
+                                    if !entry.dictionarySuggestedTerms.isEmpty {
+                                        suggestionSection
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 8)
+                            .frame(width: 360, alignment: .leading)
+                        }
+                        .frame(maxHeight: 460)
+                    }
+
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 8)
-                .frame(width: 340)
-            }
 
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
+                if isCopied {
+                    Text("Copied")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
             }
-            .buttonStyle(.plain)
         }
         .padding(10)
         .background(
@@ -243,6 +295,74 @@ private struct HistoryRow: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         )
+    }
+
+    private var hasDictionaryActivity: Bool {
+        !entry.dictionaryHitTerms.isEmpty ||
+        !entry.dictionaryCorrectedTerms.isEmpty ||
+        !entry.dictionarySuggestedTerms.isEmpty
+    }
+
+    private var suggestionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Suggested terms")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(entry.dictionarySuggestedTerms) { snapshot in
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(snapshot.term)
+                            .font(.subheadline.weight(.medium))
+                        scopeBadge(scopeLabel(for: snapshot))
+                    }
+
+                    Spacer(minLength: 8)
+
+                    switch dictionarySuggestionStore.status(for: snapshot) {
+                    case .added:
+                        Text("Added")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    case .dismissed:
+                        Text("Ignored")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    default:
+                        Button("Add to Dictionary") {
+                            dictionarySuggestionStore.addToDictionary(
+                                term: snapshot.term,
+                                groupID: snapshot.groupID,
+                                groupNameSnapshot: snapshot.groupNameSnapshot,
+                                dictionaryStore: dictionaryStore
+                            )
+                        }
+                        .controlSize(.small)
+
+                        Button("Ignore") {
+                            dictionarySuggestionStore.dismiss(
+                                term: snapshot.term,
+                                groupID: snapshot.groupID
+                            )
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+        }
+    }
+
+    private func termSection(title: LocalizedStringKey, values: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(values, id: \.self) { value in
+                Text(value)
+                    .font(.subheadline)
+            }
+        }
     }
 
     private func detailLine(labelKey: LocalizedStringKey, value: String) -> some View {
@@ -308,6 +428,34 @@ private struct HistoryRow: View {
         case .rewrite:
             return .orange
         }
+    }
+
+    private func activityChip(label: String, color: Color) -> some View {
+        Text(label)
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(color.opacity(0.14))
+            )
+            .foregroundStyle(color)
+    }
+
+    private func scopeBadge(_ label: String) -> some View {
+        Text(label)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.secondary.opacity(0.12))
+            )
+            .foregroundStyle(.secondary)
+    }
+
+    private func scopeLabel(for snapshot: DictionarySuggestionSnapshot) -> String {
+        snapshot.groupNameSnapshot ?? AppLocalization.localizedString("Global")
     }
 
     private func formattedDuration(_ seconds: TimeInterval?) -> String? {
