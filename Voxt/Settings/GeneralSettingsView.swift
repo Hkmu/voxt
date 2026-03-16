@@ -93,7 +93,7 @@ struct GeneralSettingsView: View {
                         }
                     }
 
-                    Text("Export your current general, model, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import.")
+                    Text("Export your current general, model, dictionary, voice end command, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -643,7 +643,7 @@ struct GeneralSettingsView: View {
             NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
             refreshInputDevices()
             refreshModelStorageDisplayPath()
-            configurationTransferMessage = String(localized: "Configuration imported successfully. Sensitive fields need to be filled in again if required.")
+            configurationTransferMessage = String(localized: "Configuration imported successfully. Included dictionary data was restored, and sensitive fields need to be filled in again if required.")
         } catch {
             configurationTransferMessage = String(format: NSLocalizedString("Configuration import failed: %@", comment: ""), error.localizedDescription)
         }

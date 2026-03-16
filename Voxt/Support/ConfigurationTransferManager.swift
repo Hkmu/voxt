@@ -48,6 +48,9 @@ enum ConfigurationTransferManager {
         var translationTargetLanguage: String
         var userMainLanguageCodes: [String]
         var translateSelectedTextOnTranslationHotkey: Bool
+        var voiceEndCommandEnabled: Bool
+        var voiceEndCommandPreset: String
+        var voiceEndCommandText: String
         var autoCopyWhenNoFocusedInput: Bool
         var launchAtLogin: Bool
         var showInDock: Bool
@@ -74,6 +77,9 @@ enum ConfigurationTransferManager {
             case translationTargetLanguage
             case userMainLanguageCodes
             case translateSelectedTextOnTranslationHotkey
+            case voiceEndCommandEnabled
+            case voiceEndCommandPreset
+            case voiceEndCommandText
             case autoCopyWhenNoFocusedInput
             case launchAtLogin
             case showInDock
@@ -101,6 +107,9 @@ enum ConfigurationTransferManager {
             translationTargetLanguage: String,
             userMainLanguageCodes: [String],
             translateSelectedTextOnTranslationHotkey: Bool,
+            voiceEndCommandEnabled: Bool,
+            voiceEndCommandPreset: String,
+            voiceEndCommandText: String,
             autoCopyWhenNoFocusedInput: Bool,
             launchAtLogin: Bool,
             showInDock: Bool,
@@ -126,6 +135,9 @@ enum ConfigurationTransferManager {
             self.translationTargetLanguage = translationTargetLanguage
             self.userMainLanguageCodes = UserMainLanguageOption.sanitizedSelection(userMainLanguageCodes)
             self.translateSelectedTextOnTranslationHotkey = translateSelectedTextOnTranslationHotkey
+            self.voiceEndCommandEnabled = voiceEndCommandEnabled
+            self.voiceEndCommandPreset = voiceEndCommandPreset
+            self.voiceEndCommandText = voiceEndCommandText
             self.autoCopyWhenNoFocusedInput = autoCopyWhenNoFocusedInput
             self.launchAtLogin = launchAtLogin
             self.showInDock = showInDock
@@ -157,6 +169,9 @@ enum ConfigurationTransferManager {
                     ?? UserMainLanguageOption.defaultSelectionCodes()
             )
             translateSelectedTextOnTranslationHotkey = try container.decode(Bool.self, forKey: .translateSelectedTextOnTranslationHotkey)
+            voiceEndCommandEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceEndCommandEnabled) ?? false
+            voiceEndCommandPreset = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue
+            voiceEndCommandText = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandText) ?? ""
             autoCopyWhenNoFocusedInput = try container.decode(Bool.self, forKey: .autoCopyWhenNoFocusedInput)
             launchAtLogin = try container.decode(Bool.self, forKey: .launchAtLogin)
             showInDock = try container.decode(Bool.self, forKey: .showInDock)
@@ -296,6 +311,7 @@ enum ConfigurationTransferManager {
         var autoLearningEnabled: Bool
         var highConfidenceCorrectionEnabled: Bool
         var suggestionFilterSettings: DictionarySuggestionFilterSettings
+        var historyScanCheckpoint: DictionaryHistoryScanCheckpoint?
         var entries: [DictionaryEntry]
         var suggestions: [DictionarySuggestion]
 
@@ -304,6 +320,7 @@ enum ConfigurationTransferManager {
             case autoLearningEnabled
             case highConfidenceCorrectionEnabled
             case suggestionFilterSettings
+            case historyScanCheckpoint
             case entries
             case suggestions
         }
@@ -313,6 +330,7 @@ enum ConfigurationTransferManager {
             autoLearningEnabled: Bool,
             highConfidenceCorrectionEnabled: Bool,
             suggestionFilterSettings: DictionarySuggestionFilterSettings,
+            historyScanCheckpoint: DictionaryHistoryScanCheckpoint?,
             entries: [DictionaryEntry],
             suggestions: [DictionarySuggestion]
         ) {
@@ -320,6 +338,7 @@ enum ConfigurationTransferManager {
             self.autoLearningEnabled = autoLearningEnabled
             self.highConfidenceCorrectionEnabled = highConfidenceCorrectionEnabled
             self.suggestionFilterSettings = suggestionFilterSettings
+            self.historyScanCheckpoint = historyScanCheckpoint
             self.entries = entries
             self.suggestions = suggestions
         }
@@ -333,6 +352,10 @@ enum ConfigurationTransferManager {
                 DictionarySuggestionFilterSettings.self,
                 forKey: .suggestionFilterSettings
             ) ?? .defaultValue
+            historyScanCheckpoint = try container.decodeIfPresent(
+                DictionaryHistoryScanCheckpoint.self,
+                forKey: .historyScanCheckpoint
+            )
             entries = try container.decodeIfPresent([DictionaryEntry].self, forKey: .entries) ?? []
             suggestions = try container.decodeIfPresent([DictionarySuggestion].self, forKey: .suggestions) ?? []
         }
@@ -526,6 +549,9 @@ enum ConfigurationTransferManager {
                 from: defaults.string(forKey: AppPreferenceKey.userMainLanguageCodes)
             ),
             translateSelectedTextOnTranslationHotkey: defaults.object(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey) as? Bool ?? true,
+            voiceEndCommandEnabled: defaults.object(forKey: AppPreferenceKey.voiceEndCommandEnabled) as? Bool ?? false,
+            voiceEndCommandPreset: defaults.string(forKey: AppPreferenceKey.voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue,
+            voiceEndCommandText: defaults.string(forKey: AppPreferenceKey.voiceEndCommandText) ?? "",
             autoCopyWhenNoFocusedInput: defaults.bool(forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput),
             launchAtLogin: defaults.bool(forKey: AppPreferenceKey.launchAtLogin),
             showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
@@ -544,7 +570,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 4,
+            version: 5,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -573,6 +599,7 @@ enum ConfigurationTransferManager {
                 autoLearningEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true,
                 highConfidenceCorrectionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) as? Bool ?? true,
                 suggestionFilterSettings: loadDictionarySuggestionFilterSettings(defaults: defaults),
+                historyScanCheckpoint: loadDictionaryHistoryScanCheckpoint(defaults: defaults),
                 entries: loadDictionaryEntries(),
                 suggestions: loadDictionarySuggestions()
             ),
@@ -618,6 +645,9 @@ enum ConfigurationTransferManager {
             forKey: AppPreferenceKey.userMainLanguageCodes
         )
         defaults.set(general.translateSelectedTextOnTranslationHotkey, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
+        defaults.set(general.voiceEndCommandEnabled, forKey: AppPreferenceKey.voiceEndCommandEnabled)
+        defaults.set(general.voiceEndCommandPreset, forKey: AppPreferenceKey.voiceEndCommandPreset)
+        defaults.set(general.voiceEndCommandText, forKey: AppPreferenceKey.voiceEndCommandText)
         defaults.set(general.autoCopyWhenNoFocusedInput, forKey: AppPreferenceKey.autoCopyWhenNoFocusedInput)
         defaults.set(general.launchAtLogin, forKey: AppPreferenceKey.launchAtLogin)
         defaults.set(general.showInDock, forKey: AppPreferenceKey.showInDock)
@@ -661,6 +691,7 @@ enum ConfigurationTransferManager {
             if let suggestionFilterData = try? JSONEncoder().encode(dictionary.suggestionFilterSettings.sanitized()) {
                 defaults.set(suggestionFilterData, forKey: AppPreferenceKey.dictionarySuggestionFilterSettings)
             }
+            persistDictionaryHistoryScanCheckpoint(dictionary.historyScanCheckpoint, defaults: defaults)
             persistDictionaryEntries(dictionary.entries)
             persistDictionarySuggestions(dictionary.suggestions)
         }
@@ -781,6 +812,34 @@ enum ConfigurationTransferManager {
             return .defaultValue
         }
         return settings.sanitized()
+    }
+
+    private static func loadDictionaryHistoryScanCheckpoint(
+        defaults: UserDefaults
+    ) -> DictionaryHistoryScanCheckpoint? {
+        guard
+            let data = defaults.data(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint),
+            let checkpoint = try? JSONDecoder().decode(DictionaryHistoryScanCheckpoint.self, from: data)
+        else {
+            return nil
+        }
+        return checkpoint
+    }
+
+    private static func persistDictionaryHistoryScanCheckpoint(
+        _ checkpoint: DictionaryHistoryScanCheckpoint?,
+        defaults: UserDefaults
+    ) {
+        guard let checkpoint else {
+            defaults.removeObject(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
+            return
+        }
+
+        guard let data = try? JSONEncoder().encode(checkpoint) else {
+            defaults.removeObject(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
+            return
+        }
+        defaults.set(data, forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
     }
 
     private static func persistDictionaryEntries(_ entries: [DictionaryEntry]) {

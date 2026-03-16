@@ -440,11 +440,11 @@
 "Configuration" = "設定ファイル";
 "Export Configuration" = "設定をエクスポート";
 "Import Configuration" = "設定をインポート";
-"Export your current general, model, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import." = "現在の一般設定、モデル設定、アプリ分岐設定、ショートカット設定を JSON ファイルとしてエクスポートします。機密情報はエクスポート時にプレースホルダーへ置き換えられ、インポート後に再入力が必要です。";
+"Export your current general, model, dictionary, voice end command, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import." = "現在の一般設定、モデル設定、辞書設定、音声終了コマンド、アプリ分岐設定、ショートカット設定を JSON ファイルとしてエクスポートします。機密情報はエクスポート時にプレースホルダーへ置き換えられ、インポート後に再入力が必要です。";
 "Configuration exported successfully." = "設定のエクスポートが完了しました。";
 "Configuration import failed: %@" = "設定のインポートに失敗しました: %@";
 "Configuration export failed: %@" = "設定のエクスポートに失敗しました: %@";
-"Configuration imported successfully. Sensitive fields need to be filled in again if required." = "設定のインポートが完了しました。必要に応じて機密情報を再入力してください。";
+"Configuration imported successfully. Included dictionary data was restored, and sensitive fields need to be filled in again if required." = "設定のインポートが完了しました。含まれていた辞書データを復元しました。必要に応じて機密情報を再入力してください。";
 "Model Setup Required" = "モデル設定の補完が必要";
 "Needs Setup" = "要設定";
 "Model needs to be installed." = "モデルをインストールする必要があります。";

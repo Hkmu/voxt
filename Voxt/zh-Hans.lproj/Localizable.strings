@@ -441,11 +441,11 @@
 "Configuration" = "配置";
 "Export Configuration" = "导出配置";
 "Import Configuration" = "导入配置";
-"Export your current general, model, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import." = "将当前的通用、模型、应用分组和快捷键设置导出为 JSON 配置文件。导出时敏感字段会被占位符替换，导入后需要由用户重新补全。";
+"Export your current general, model, dictionary, voice end command, app branch, and hotkey settings to a JSON file. Sensitive fields are replaced with placeholders during export and must be filled in again after import." = "将当前的通用、模型、词典、语音结束命令、应用分组和快捷键设置导出为 JSON 配置文件。导出时敏感字段会被占位符替换，导入后需要由用户重新补全。";
 "Configuration exported successfully." = "配置导出成功。";
 "Configuration import failed: %@" = "配置导入失败：%@";
 "Configuration export failed: %@" = "配置导出失败：%@";
-"Configuration imported successfully. Sensitive fields need to be filled in again if required." = "配置导入成功。如有需要，请重新填写敏感字段。";
+"Configuration imported successfully. Included dictionary data was restored, and sensitive fields need to be filled in again if required." = "配置导入成功。包含的词典数据已恢复，如有需要，请重新填写敏感字段。";
 "Model Setup Required" = "模型需补全配置";
 "Needs Setup" = "需补全配置";
 "Model needs to be installed." = "模型需要先安装。";
