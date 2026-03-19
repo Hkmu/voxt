@@ -88,8 +88,6 @@ struct HistorySettingsView: View {
                                 ForEach(historyStore.entries) { entry in
                                     HistoryRow(
                                         entry: entry,
-                                        dictionaryStore: dictionaryStore,
-                                        dictionarySuggestionStore: dictionarySuggestionStore,
                                         isCopied: copiedEntryID == entry.id,
                                         onCopy: {
                                             copyToPasteboard(entry.text)
@@ -161,8 +159,6 @@ private struct HistoryRow: View {
     @Environment(\.locale) private var locale
 
     let entry: TranscriptionHistoryEntry
-    @ObservedObject var dictionaryStore: DictionaryStore
-    @ObservedObject var dictionarySuggestionStore: DictionarySuggestionStore
     let isCopied: Bool
     let onCopy: () -> Void
     let onDelete: () -> Void
@@ -199,14 +195,15 @@ private struct HistoryRow: View {
                                         color: .blue
                                     )
                                 }
-                                if !entry.dictionarySuggestedTerms.isEmpty {
-                                    activityChip(
-                                        label: AppLocalization.format("Suggestions %d", entry.dictionarySuggestedTerms.count),
-                                        color: .orange
-                                    )
-                                }
                             }
                         }
+                    }
+
+                    if !entry.dictionaryHitTerms.isEmpty {
+                        Text("\(String(localized: "Matched dictionary terms")): \(matchedTermsPreview)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,9 +258,6 @@ private struct HistoryRow: View {
                                     if !entry.dictionaryCorrectedTerms.isEmpty {
                                         termSection(title: "Corrected terms", values: entry.dictionaryCorrectedTerms)
                                     }
-                                    if !entry.dictionarySuggestedTerms.isEmpty {
-                                        suggestionSection
-                                    }
                                 }
                             }
                             .padding(.vertical, 10)
@@ -299,57 +293,7 @@ private struct HistoryRow: View {
 
     private var hasDictionaryActivity: Bool {
         !entry.dictionaryHitTerms.isEmpty ||
-        !entry.dictionaryCorrectedTerms.isEmpty ||
-        !entry.dictionarySuggestedTerms.isEmpty
-    }
-
-    private var suggestionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Suggested terms")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            ForEach(entry.dictionarySuggestedTerms) { snapshot in
-                HStack(alignment: .top, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(snapshot.term)
-                            .font(.subheadline.weight(.medium))
-                        scopeBadge(scopeLabel(for: snapshot))
-                    }
-
-                    Spacer(minLength: 8)
-
-                    switch dictionarySuggestionStore.status(for: snapshot) {
-                    case .added:
-                        Text("Added")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    case .dismissed:
-                        Text("Ignored")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    default:
-                        Button("Add to Dictionary") {
-                            dictionarySuggestionStore.addToDictionary(
-                                term: snapshot.term,
-                                groupID: snapshot.groupID,
-                                groupNameSnapshot: snapshot.groupNameSnapshot,
-                                dictionaryStore: dictionaryStore
-                            )
-                        }
-                        .controlSize(.small)
-
-                        Button("Ignore") {
-                            dictionarySuggestionStore.dismiss(
-                                term: snapshot.term,
-                                groupID: snapshot.groupID
-                            )
-                        }
-                        .controlSize(.small)
-                    }
-                }
-            }
-        }
+        !entry.dictionaryCorrectedTerms.isEmpty
     }
 
     private func termSection(title: LocalizedStringKey, values: [String]) -> some View {
@@ -442,20 +386,12 @@ private struct HistoryRow: View {
             .foregroundStyle(color)
     }
 
-    private func scopeBadge(_ label: String) -> some View {
-        Text(label)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.secondary.opacity(0.12))
-            )
-            .foregroundStyle(.secondary)
-    }
-
-    private func scopeLabel(for snapshot: DictionarySuggestionSnapshot) -> String {
-        snapshot.groupNameSnapshot ?? AppLocalization.localizedString("Global")
+    private var matchedTermsPreview: String {
+        let previewTerms = Array(entry.dictionaryHitTerms.prefix(3))
+        let base = previewTerms.joined(separator: ", ")
+        let remainingCount = entry.dictionaryHitTerms.count - previewTerms.count
+        guard remainingCount > 0 else { return base }
+        return "\(base) +\(remainingCount)"
     }
 
     private func formattedDuration(_ seconds: TimeInterval?) -> String? {

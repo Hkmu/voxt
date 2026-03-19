@@ -4,6 +4,7 @@ import HuggingFace
 
 enum ModelStorageDirectoryManager {
     private static var securityScopedURL: URL?
+    private static let fileManager = FileManager.default
 
     static var defaultRootURL: URL {
         HubCache.default.cacheDirectory
@@ -39,7 +40,9 @@ enum ModelStorageDirectoryManager {
     }
 
     static func openRootInFinder() {
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: resolvedRootURL().path)
+        let url = resolvedRootURL()
+        try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     private static func resolveSecurityScopedURL(from bookmarkData: Data) -> URL? {

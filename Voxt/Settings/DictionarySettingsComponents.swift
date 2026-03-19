@@ -134,16 +134,6 @@ struct DictionarySuggestionRow: View {
                             fill: Color.secondary.opacity(0.12),
                             foreground: Color.secondary
                         )
-                        Text(AppLocalization.format("Seen %d times", suggestion.seenCount))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        if let sample = suggestion.evidenceSamples.first, !sample.isEmpty {
-                            Text("· \(sample)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
                     }
                 }
             },

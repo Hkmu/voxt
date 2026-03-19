@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct DictionarySettingsView: View {
     @AppStorage(AppPreferenceKey.dictionaryRecognitionEnabled) private var dictionaryRecognitionEnabled = true
+    @AppStorage(AppPreferenceKey.dictionaryAutoLearningEnabled) private var dictionaryAutoLearningEnabled = true
     @AppStorage(AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) private var dictionaryHighConfidenceCorrectionEnabled = true
     @AppStorage(AppPreferenceKey.dictionarySuggestionIngestModelOptionID) private var preferredHistoryScanModelID = ""
 
@@ -53,7 +54,6 @@ struct DictionarySettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             settingsCard
             dictionaryListCard
-            suggestionsCard
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .sheet(item: $dialog) { currentDialog in
@@ -73,10 +73,9 @@ struct DictionarySettingsView: View {
                 remoteModelOptions: remoteHistoryScanModelOptions,
                 selectedModelOption: selectedHistoryScanModelOption,
                 selectedModelID: $selectedHistoryScanModelID,
-                draft: $suggestionFilterDraft,
+                draftPrompt: $suggestionFilterDraft.prompt,
                 isPresented: $showSuggestionIngestDialog,
-                onIngest: { runSuggestionIngest(persistSettings: false) },
-                onSave: { runSuggestionIngest(persistSettings: true) }
+                onIngest: runSuggestionIngest
             )
         }
         .onAppear(perform: reloadContent)
@@ -87,45 +86,101 @@ struct DictionarySettingsView: View {
 
     private var settingsCard: some View {
         GroupBox {
-            HStack(alignment: .center, spacing: 16) {
-                Toggle("Enable Dictionary", isOn: $dictionaryRecognitionEnabled)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 16) {
+                    Toggle("Enable Dictionary", isOn: $dictionaryRecognitionEnabled)
+                        .controlSize(.small)
+
+                    Button {
+                        showDictionaryAdvancedSettings = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Dictionary Advanced Settings"))
+
+                    Button {
+                        showDictionaryInfo.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showDictionaryInfo, arrowEdge: .top) {
+                        Text("Dictionary recognition injects matched terms into prompts and can correct high-confidence near matches before output.")
+                            .font(.caption)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .frame(width: 300, alignment: .leading)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Spacer(minLength: 12)
+
+                    Toggle("Auto Ingest", isOn: $dictionaryAutoLearningEnabled)
+                        .controlSize(.small)
+
+                    Button(dictionarySuggestionStore.historyScanProgress.isRunning ? String(localized: "Scanning...") : String(localized: "One-Click Ingest")) {
+                        presentSuggestionIngestDialog()
+                    }
+                    .controlSize(.small)
+                    .disabled(dictionarySuggestionStore.historyScanProgress.isRunning || pendingHistoryScanCount == 0)
+
+                    Divider()
+                        .frame(height: 16)
+
+                    Button("Import") {
+                        importDictionary()
+                    }
                     .controlSize(.small)
 
-                Spacer(minLength: 12)
-
-                Button {
-                    showDictionaryAdvancedSettings = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .foregroundStyle(.secondary)
+                    Button("Export") {
+                        exportDictionary()
+                    }
+                    .controlSize(.small)
                 }
-                .buttonStyle(.plain)
-                .help(String(localized: "Dictionary Advanced Settings"))
 
-                Button {
-                    showDictionaryInfo.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showDictionaryInfo, arrowEdge: .top) {
-                    Text("Dictionary recognition injects matched terms into prompts and can correct high-confidence near matches before output.")
+                Text("When enabled, new history records are scanned automatically and the extracted terms are written directly into the dictionary.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if dictionarySuggestionStore.historyScanProgress.isRunning {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(
+                            value: Double(dictionarySuggestionStore.historyScanProgress.processedCount),
+                            total: Double(max(dictionarySuggestionStore.historyScanProgress.totalCount, 1))
+                        )
+                        Text(historyScanStatusText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let errorMessage = dictionarySuggestionStore.historyScanProgress.errorMessage,
+                          !errorMessage.isEmpty {
+                    Text(errorMessage)
                         .font(.caption)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(width: 300, alignment: .leading)
+                        .foregroundStyle(.red)
+                } else if let lastRunAt = dictionarySuggestionStore.historyScanProgress.lastRunAt {
+                    Text(historyScanSummaryText(lastRunAt: lastRunAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if pendingHistoryScanCount > 0 {
+                    Text(
+                        AppLocalization.format(
+                            "%d new history records are ready for dictionary ingestion.",
+                            pendingHistoryScanCount
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
-                Button("Import") {
-                    importDictionary()
+                if let suggestionActionMessage, !suggestionActionMessage.isEmpty {
+                    Text(suggestionActionMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .controlSize(.small)
-
-                Button("Export") {
-                    exportDictionary()
-                }
-                .controlSize(.small)
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -191,106 +246,6 @@ struct DictionarySettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxHeight: .infinity, alignment: .top)
-    }
-
-    private var suggestionsCard: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Suggested terms")
-                        .font(.headline)
-                    Spacer()
-                    Button(dictionarySuggestionStore.historyScanProgress.isRunning ? String(localized: "Scanning...") : String(localized: "One-Click Ingest")) {
-                        presentSuggestionIngestDialog()
-                    }
-                    .controlSize(.small)
-                    .disabled(dictionarySuggestionStore.historyScanProgress.isRunning || pendingHistoryScanCount == 0)
-
-                    Button("One-Click Add") {
-                        let result = dictionarySuggestionStore.addAllPendingToDictionary(dictionaryStore: dictionaryStore)
-                        suggestionActionMessage = AppLocalization.format(
-                            "Added %d candidates and skipped %d duplicates.",
-                            result.addedCount,
-                            result.skippedCount
-                        )
-                    }
-                    .controlSize(.small)
-                    .disabled(dictionarySuggestionStore.pendingSuggestions.isEmpty)
-
-                    Button("Delete", role: .destructive) {
-                        dictionarySuggestionStore.clearAll()
-                        suggestionActionMessage = nil
-                    }
-                    .controlSize(.small)
-                    .disabled(dictionarySuggestionStore.suggestions.isEmpty)
-                }
-
-                if dictionarySuggestionStore.historyScanProgress.isRunning {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ProgressView(
-                            value: Double(dictionarySuggestionStore.historyScanProgress.processedCount),
-                            total: Double(max(dictionarySuggestionStore.historyScanProgress.totalCount, 1))
-                        )
-                        Text(historyScanStatusText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if let errorMessage = dictionarySuggestionStore.historyScanProgress.errorMessage,
-                          !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                } else if let lastRunAt = dictionarySuggestionStore.historyScanProgress.lastRunAt {
-                    Text(historyScanSummaryText(lastRunAt: lastRunAt))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if pendingHistoryScanCount > 0 {
-                    Text(
-                        AppLocalization.format(
-                            "%d new history records are ready for dictionary ingestion.",
-                            pendingHistoryScanCount
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-                if let suggestionActionMessage, !suggestionActionMessage.isEmpty {
-                    Text(suggestionActionMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if dictionarySuggestionStore.pendingSuggestions.isEmpty {
-                    Text("No pending dictionary suggestions.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(dictionarySuggestionStore.pendingSuggestions) { suggestion in
-                                DictionarySuggestionRow(
-                                    suggestion: suggestion,
-                                    scopeLabel: suggestionScopeLabel(for: suggestion),
-                                    onAdd: {
-                                        dictionarySuggestionStore.addToDictionary(
-                                            id: suggestion.id,
-                                            dictionaryStore: dictionaryStore
-                                        )
-                                    },
-                                    onDismiss: {
-                                        dictionarySuggestionStore.dismiss(id: suggestion.id)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 220, alignment: .top)
-                }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 
     @ViewBuilder
@@ -382,16 +337,20 @@ struct DictionarySettingsView: View {
         showSuggestionIngestDialog = true
     }
 
-    private func runSuggestionIngest(persistSettings: Bool) {
+    private func runSuggestionIngest() {
         guard !selectedHistoryScanModelID.isEmpty else { return }
         suggestionActionMessage = nil
         preferredHistoryScanModelID = selectedHistoryScanModelID
         onIngestSuggestionsFromHistory(
             DictionaryHistoryScanRequest(
                 modelOptionID: selectedHistoryScanModelID,
-                filterSettings: suggestionFilterDraft.sanitized()
+                filterSettings: DictionarySuggestionFilterSettings(
+                    prompt: suggestionFilterDraft.prompt,
+                    batchSize: dictionarySuggestionStore.filterSettings.batchSize,
+                    maxCandidatesPerBatch: dictionarySuggestionStore.filterSettings.maxCandidatesPerBatch
+                ).sanitized()
             ),
-            persistSettings
+            true
         )
         showSuggestionIngestDialog = false
     }
@@ -488,7 +447,7 @@ struct DictionarySettingsView: View {
 
     private var historyScanStatusText: String {
         AppLocalization.format(
-            "Scanned %d of %d history records. Added %d suggestions, skipped %d duplicates.",
+            "Scanned %d of %d history records. Added %d dictionary terms, skipped %d duplicates.",
             dictionarySuggestionStore.historyScanProgress.processedCount,
             dictionarySuggestionStore.historyScanProgress.totalCount,
             dictionarySuggestionStore.historyScanProgress.newSuggestionCount,
@@ -503,7 +462,7 @@ struct DictionarySettingsView: View {
         let progress = dictionarySuggestionStore.historyScanProgress
         if pendingHistoryScanCount > 0 {
             return AppLocalization.format(
-                "Last scan %@ processed %d history records and added %d suggestions. %d new history records are waiting.",
+                "Last scan %@ processed %d history records and added %d dictionary terms. %d new history records are waiting.",
                 timeText,
                 progress.lastProcessedCount,
                 progress.lastNewSuggestionCount,
@@ -511,7 +470,7 @@ struct DictionarySettingsView: View {
             )
         }
         return AppLocalization.format(
-            "Last scan %@ processed %d history records and added %d suggestions.",
+            "Last scan %@ processed %d history records and added %d dictionary terms.",
             timeText,
             progress.lastProcessedCount,
             progress.lastNewSuggestionCount

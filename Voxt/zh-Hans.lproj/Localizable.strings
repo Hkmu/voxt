@@ -491,6 +491,10 @@
 "Dictionary Advanced Settings" = "词典高级设置";
 "When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted." = "开启后，最终输出在写入前会将极高置信度的近似词替换为词典中的准确词汇。";
 "One-Click Ingest" = "一键录入";
+"Auto Ingest" = "自动录入";
+"When enabled, new history records are scanned automatically for candidate dictionary terms, but suggestions are not added to the dictionary automatically." = "开启后，有新的历史记录时会自动扫描候选词典词，但不会自动加入词典。";
+"When enabled, new history records are scanned automatically and the extracted terms are written directly into the dictionary." = "开启后，有新的历史记录时会自动扫描，并将提取出的词汇直接写入词典。";
+"Voxt will scan the new history records with the selected model and write the extracted terms directly into the dictionary." = "Voxt 会使用所选模型扫描新的历史记录，并将提取出的词汇直接写入词典。";
 "Ingest runs with the current draft only. Save stores the prompt and thresholds, then runs ingestion." = "录入仅使用当前草稿运行一次。保存会先存储 prompt 和阈值参数，然后开始录入。";
 "Scanning..." = "扫描中...";
 "One-Click Add" = "一键添加";

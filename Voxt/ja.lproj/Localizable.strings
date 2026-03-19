@@ -505,6 +505,10 @@
 "Dictionary Advanced Settings" = "辞書の詳細設定";
 "When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted." = "有効にすると、最終出力の挿入前に、非常に高い信頼度の近似一致を辞書の正確な用語へ置き換えます。";
 "One-Click Ingest" = "ワンクリック取り込み";
+"Auto Ingest" = "自動取り込み";
+"When enabled, new history records are scanned automatically for candidate dictionary terms, but suggestions are not added to the dictionary automatically." = "有効にすると、新しい履歴レコードは候補となる辞書語を自動的にスキャンしますが、候補は自動で辞書に追加されません。";
+"When enabled, new history records are scanned automatically and the extracted terms are written directly into the dictionary." = "有効にすると、新しい履歴レコードは自動的にスキャンされ、抽出された語句がそのまま辞書に追加されます。";
+"Voxt will scan the new history records with the selected model and write the extracted terms directly into the dictionary." = "Voxt は選択したモデルで新しい履歴レコードをスキャンし、抽出した語句をそのまま辞書に書き込みます。";
 "Ingest runs with the current draft only. Save stores the prompt and thresholds, then runs ingestion." = "取り込みは現在の下書きで一度だけ実行します。保存は prompt としきい値を保存してから取り込みを開始します。";
 "Scanning..." = "スキャン中...";
 "One-Click Add" = "一括追加";

@@ -139,24 +139,39 @@ struct DictionarySuggestionFilterSettings: Codable, Equatable, Hashable {
     static let maximumMaxCandidates = 50
 
     static let defaultPrompt = """
-    You are helping a speech transcription app build a user dictionary.
+    You're building a user dictionary for a speech-to-text app. Review history records to extract only terms worthy of recommendation. Ensure the dictionary is accurate, relevant, and aligned with user needs.
 
-    Review the history records and extract only terms that are worth suggesting for dictionary entry.
-
-    Include only:
-    - person names
-    - company, brand, product, app, and project names
-    - technical acronyms
-    - uncommon domain-specific terms or unique user-specific spellings
+    ### Task Scope & Inclusion/Exclusion Rules
+    Include only these verified terms:
+    1. Personal names (specific individuals)
+    2. Organization/brand/product/app/project names (companies, product models, app titles, project codes)
+    3. Technical acronyms (domain-specific abbreviations with clear meanings)
+    4. Uncommon domain jargon or consistent user-specific spellings
 
     Exclude:
-    - common English words
-    - generic verbs, adjectives, or adverbs
-    - ordinary sentence-start capitalized words
-    - filler words
-    - anything already covered by dictionaryHitTerms or dictionaryCorrectedTerms unless the record clearly introduces a new spelling worth suggesting
+    1. Common English words (e.g., "hello", "run", "happy")
+    2. Generic verbs/adjectives/adverbs (e.g., "walk", "quick", "very")
+    3. Ordinary capitalized words at sentence starts (e.g., "The")
+    4. Filler words (e.g., "um", "like", "you know")
+    5. Terms in `dictionaryHitTerms`/`dictionaryCorrectedTerms` unless records have a new, recommendable spelling (note the new spelling)
+    6. Obviously incorrect words
+    7. For Asian languages (Chinese, Korean, Japanese): Avoid common character combinations; only include proper nouns, domain jargon, or unique user spellings
 
-    Strongly prefer terms supported by repeated records. A single-record term is allowed only when it is clearly a proper noun or a specialized term.
+    ### Priority & Validation Rules
+    - Prioritize terms with >=2 occurrences
+    - Analyze based on the user's main language
+    - Single-record terms are included only if:
+      - Clearly a proper noun (distinctive name/company)
+      - Domain-specific technical term with clear context (e.g., rare medical jargon defined in the record)
+    - For Asian languages: Ensure terms aren't common everyday expressions; check contextual relevance
+
+    ### Input/Output Specifications
+    - User's main language: {{USER_MAIN_LANGUAGE}}
+    - Input: {{HISTORY_RECORDS}} (XML-wrapped speech-to-text history)
+    - Output: Structured list of recommended terms
+      - One term per line
+      - Prefer short terms
+      - Return null if no worthy terms
     """
 
     static let defaultValue = DictionarySuggestionFilterSettings(
@@ -269,16 +284,22 @@ final class DictionarySuggestionStore: ObservableObject {
             return $0.createdAt < $1.createdAt
         }
 
-        guard let checkpoint = historyScanCheckpoint else { return sorted }
-        return sorted.filter {
-            if $0.createdAt > checkpoint.lastProcessedAt {
-                return true
+        let pendingEntries: [TranscriptionHistoryEntry]
+        if let checkpoint = historyScanCheckpoint {
+            pendingEntries = sorted.filter {
+                if $0.createdAt > checkpoint.lastProcessedAt {
+                    return true
+                }
+                if $0.createdAt < checkpoint.lastProcessedAt {
+                    return false
+                }
+                return $0.id.uuidString > checkpoint.lastHistoryEntryID.uuidString
             }
-            if $0.createdAt < checkpoint.lastProcessedAt {
-                return false
-            }
-            return $0.id.uuidString > checkpoint.lastHistoryEntryID.uuidString
+        } else {
+            pendingEntries = sorted
         }
+
+        return pendingEntries.filter { $0.kind == .normal }
     }
 
     func beginHistoryScan(totalCount: Int) {
@@ -543,10 +564,8 @@ final class DictionarySuggestionStore: ObservableObject {
             )
         }
 
-        let now = Date()
         var newSuggestionCount = 0
         var duplicateCount = 0
-        var snapshotsByHistoryID: [UUID: [DictionarySuggestionSnapshot]] = [:]
 
         for candidate in candidates {
             let normalized = DictionaryStore.normalizeTerm(candidate.term)
@@ -556,58 +575,24 @@ final class DictionarySuggestionStore: ObservableObject {
                 continue
             }
 
-            let snapshot = DictionarySuggestionSnapshot(
-                term: candidate.term,
-                normalizedTerm: normalized,
-                groupID: candidate.groupID,
-                groupNameSnapshot: candidate.groupNameSnapshot
-            )
-
-            if let index = suggestions.firstIndex(where: {
-                $0.normalizedTerm == normalized && $0.groupID == candidate.groupID
-            }) {
-                guard suggestions[index].status == .pending else {
-                    duplicateCount += 1
-                    continue
-                }
-
-                suggestions[index].term = candidate.term
-                suggestions[index].lastSeenAt = now
-                suggestions[index].seenCount += max(candidate.historyEntryIDs.count, 1)
-                suggestions[index].lastHistoryEntryID = candidate.historyEntryIDs.last ?? suggestions[index].lastHistoryEntryID
-                suggestions[index].groupNameSnapshot = candidate.groupNameSnapshot ?? suggestions[index].groupNameSnapshot
-                suggestions[index].sourceContext = .repeatObservation
-                appendEvidenceSample(candidate.evidenceSample, to: &suggestions[index])
-                duplicateCount += 1
-            } else {
-                suggestions.append(
-                    DictionarySuggestion(
-                        term: candidate.term,
-                        normalizedTerm: normalized,
-                        sourceContext: .history,
-                        firstSeenAt: now,
-                        lastSeenAt: now,
-                        seenCount: max(candidate.historyEntryIDs.count, 1),
-                        lastHistoryEntryID: candidate.historyEntryIDs.last,
-                        groupID: candidate.groupID,
-                        groupNameSnapshot: candidate.groupNameSnapshot,
-                        evidenceSamples: candidate.evidenceSample.isEmpty ? [] : [candidate.evidenceSample]
-                    )
+            do {
+                try dictionaryStore.createAutoEntry(
+                    term: candidate.term,
+                    groupID: candidate.groupID,
+                    groupNameSnapshot: candidate.groupNameSnapshot
                 )
                 newSuggestionCount += 1
-            }
-
-            for historyEntryID in candidate.historyEntryIDs {
-                snapshotsByHistoryID[historyEntryID, default: []].append(snapshot)
+            } catch {
+                if dictionaryStore.hasEntry(normalizedTerm: normalized, activeGroupID: candidate.groupID) {
+                    duplicateCount += 1
+                }
             }
         }
 
-        suggestions = deduplicatedSuggestions(suggestions)
-        persist()
         return DictionaryHistoryScanApplyResult(
             newSuggestionCount: newSuggestionCount,
             duplicateCount: duplicateCount,
-            snapshotsByHistoryID: snapshotsByHistoryID
+            snapshotsByHistoryID: [:]
         )
     }
 

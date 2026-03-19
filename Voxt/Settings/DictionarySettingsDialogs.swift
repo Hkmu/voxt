@@ -38,10 +38,9 @@ struct DictionarySuggestionIngestDialog: View {
     let remoteModelOptions: [DictionaryHistoryScanModelOption]
     let selectedModelOption: DictionaryHistoryScanModelOption?
     @Binding var selectedModelID: String
-    @Binding var draft: DictionarySuggestionFilterSettings
+    @Binding var draftPrompt: String
     @Binding var isPresented: Bool
     let onIngest: () -> Void
-    let onSave: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -91,36 +90,13 @@ struct DictionarySuggestionIngestDialog: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 PromptEditorView(
-                    text: $draft.prompt,
-                    height: 144,
+                    text: $draftPrompt,
+                    height: 160,
                     contentPadding: 2
                 )
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Stepper(value: $draft.batchSize, in: DictionarySuggestionFilterSettings.minimumBatchSize...DictionarySuggestionFilterSettings.maximumBatchSize) {
-                    HStack {
-                        Text("Batch Size")
-                        Spacer()
-                        Text("\(draft.batchSize)")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Stepper(
-                    value: $draft.maxCandidatesPerBatch,
-                    in: DictionarySuggestionFilterSettings.minimumMaxCandidates...DictionarySuggestionFilterSettings.maximumMaxCandidates
-                ) {
-                    HStack {
-                        Text("Max Candidates Per Batch")
-                        Spacer()
-                        Text("\(draft.maxCandidatesPerBatch)")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            Text(String(localized: "Ingest runs with the current draft only. Save stores the prompt and thresholds, then runs ingestion."))
+            Text("Voxt will scan the new history records with the selected model and write the extracted terms directly into the dictionary.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -131,16 +107,13 @@ struct DictionarySuggestionIngestDialog: View {
 
                 Spacer()
 
-                Button(String(localized: "Ingest"), action: onIngest)
-                    .disabled(selectedModelID.isEmpty)
-
-                Button("Save", action: onSave)
+                Button("Apply", action: onIngest)
                     .keyboardShortcut(.defaultAction)
                     .disabled(selectedModelID.isEmpty)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .frame(width: 620)
+        .frame(width: 460)
     }
 }

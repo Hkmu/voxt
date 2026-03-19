@@ -186,13 +186,20 @@ struct GeneralModelStorageCard: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(action: onOpenFinder) {
-                    Text(displayPath)
-                        .underline()
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .multilineTextAlignment(.trailing)
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .font(.caption)
+                        Text(displayPath)
+                            .underline()
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .multilineTextAlignment(.trailing)
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.caption)
+                    }
                 }
                 .buttonStyle(.plain)
+                .help("Open folder")
 
                 Button("Choose", action: onChoose)
                     .controlSize(.small)

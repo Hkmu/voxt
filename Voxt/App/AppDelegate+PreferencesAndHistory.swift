@@ -153,6 +153,10 @@ extension AppDelegate {
         defaults.bool(forKey: AppPreferenceKey.historyEnabled)
     }
 
+    var dictionaryAutoLearningEnabled: Bool {
+        defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true
+    }
+
     var autoCheckForUpdates: Bool {
         defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates)
     }
@@ -269,6 +273,11 @@ extension AppDelegate {
 
         lastEnhancementPromptContext = nil
         transcriptionResultReceivedAt = nil
+
+        if entryID != nil {
+            scheduleAutomaticDictionaryHistorySuggestionScanIfNeeded()
+        }
+
         return entryID
     }
 

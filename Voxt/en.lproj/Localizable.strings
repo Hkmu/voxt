@@ -481,6 +481,10 @@
 "No pending dictionary suggestions." = "No pending dictionary suggestions.";
 "Seen %d times" = "Seen %d times";
 "One-Click Ingest" = "One-Click Ingest";
+"Auto Ingest" = "Auto Ingest";
+"When enabled, new history records are scanned automatically for candidate dictionary terms, but suggestions are not added to the dictionary automatically." = "When enabled, new history records are scanned automatically for candidate dictionary terms, but suggestions are not added to the dictionary automatically.";
+"When enabled, new history records are scanned automatically and the extracted terms are written directly into the dictionary." = "When enabled, new history records are scanned automatically and the extracted terms are written directly into the dictionary.";
+"Voxt will scan the new history records with the selected model and write the extracted terms directly into the dictionary." = "Voxt will scan the new history records with the selected model and write the extracted terms directly into the dictionary.";
 "Ingest runs with the current draft only. Save stores the prompt and thresholds, then runs ingestion." = "Ingest runs with the current draft only. Save stores the prompt and thresholds, then runs ingestion.";
 "Scanning..." = "Scanning...";
 "One-Click Add" = "One-Click Add";
