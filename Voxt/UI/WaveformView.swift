@@ -23,8 +23,10 @@ struct WaveformView: View {
     private let barAreaHeight: CGFloat = 28
     private let barCount = 16
     private let basePhases: [Double] = (0..<16).map { Double($0) * 0.4 }
+    private let baseTravelPhase = 0.0
 
     @State private var phases: [Double] = (0..<16).map { Double($0) * 0.4 }
+    @State private var travelPhase = 0.0
     @State private var animTimer: Timer?
     @State private var currentAnimationInterval: TimeInterval?
     @State private var appeared = false
@@ -318,10 +320,14 @@ struct WaveformView: View {
 
         if isRecording {
             let level = normalizedAudioLevel(audioLevel)
-            let pulse = CGFloat(sine * 0.82 + 0.18)
-            let emphasis = pow(level, 0.82)
-            let floor = max(0.12, min(0.36, level * 0.42))
-            let driven = minH + (maxH - minH) * (floor + emphasis * pulse * 0.9)
+            let audioEnvelope = pow(level, 0.84)
+            let travelEnvelope = recordingTravelEnvelope(for: index)
+            let ambientEnvelope = CGFloat(sine * 0.65 + 0.35)
+            let baseFloor = 0.10 + min(0.08, level * 0.12)
+            let travelStrength = 0.18 + audioEnvelope * 0.82
+            let ambientStrength = 0.08 + audioEnvelope * 0.24
+            let mixedEnvelope = min(1.0, baseFloor + travelEnvelope * travelStrength + ambientEnvelope * ambientStrength)
+            let driven = minH + (maxH - minH) * mixedEnvelope
             return max(minH, driven)
         }
 
@@ -335,9 +341,10 @@ struct WaveformView: View {
     private func glowOpacity(for index: Int) -> Double {
         guard isRecording else { return 0.08 }
         let level = Double(normalizedAudioLevel(audioLevel))
-        let phase = phases[index]
-        let sine = (sin(phase * 1.15) + 1) / 2
-        return min(0.35, 0.08 + level * 0.27 * sine)
+        let travelEnvelope = Double(recordingTravelEnvelope(for: index))
+        let ambientPulse = (sin(phases[index] * 1.15) + 1) / 2
+        let glow = 0.07 + ambientPulse * 0.05 + travelEnvelope * 0.12 + level * (0.04 + travelEnvelope * 0.1)
+        return min(0.32, glow)
     }
 
     private func normalizedAudioLevel(_ raw: Float) -> CGFloat {
@@ -363,6 +370,24 @@ struct WaveformView: View {
         let phase = phases[index]
         let sine = (sin(phase * 1.2) + 1) / 2
         return 0.35 + 0.4 * sine
+    }
+
+    private func recordingTravelEnvelope(for index: Int) -> CGFloat {
+        let head = travelPhase
+        let distance = wrappedDistance(from: Double(index), to: head, period: Double(barCount))
+        let sigma = 2.15
+        let gaussian = exp(-(distance * distance) / (2 * sigma * sigma))
+        return CGFloat(gaussian)
+    }
+
+    private func wrappedDistance(from index: Double, to head: Double, period: Double) -> Double {
+        var delta = index - head
+        if delta > period / 2 {
+            delta -= period
+        } else if delta < -period / 2 {
+            delta += period
+        }
+        return delta
     }
 
     private var desiredAnimationInterval: TimeInterval? {
@@ -405,8 +430,20 @@ struct WaveformView: View {
         animTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             let speed = animationSpeed
             guard speed > 0 else { return }
-            for i in 0..<barCount {
-                phases[i] += speed + Double(i) * 0.006
+            if displayMode == .recording && isRecording {
+                travelPhase.formTruncatingRemainder(dividingBy: Double(barCount))
+                travelPhase += 0.62
+                if travelPhase >= Double(barCount) {
+                    travelPhase -= Double(barCount)
+                }
+
+                for i in 0..<barCount {
+                    phases[i] += 0.11 + Double(i) * 0.004
+                }
+            } else {
+                for i in 0..<barCount {
+                    phases[i] += speed + Double(i) * 0.006
+                }
             }
         }
     }
@@ -417,6 +454,7 @@ struct WaveformView: View {
         currentAnimationInterval = nil
         if resetPhases {
             phases = basePhases
+            travelPhase = baseTravelPhase
         }
     }
 
