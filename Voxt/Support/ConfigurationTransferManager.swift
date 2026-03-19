@@ -387,6 +387,73 @@ enum ConfigurationTransferManager {
         var hotkeyTriggerMode: String
         var hotkeyDistinguishModifierSides: Bool
         var hotkeyPreset: String
+        var escapeKeyCancelsOverlaySession: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case hotkeyKeyCode
+            case hotkeyModifiers
+            case hotkeySidedModifiers
+            case translationHotkeyKeyCode
+            case translationHotkeyModifiers
+            case translationHotkeySidedModifiers
+            case rewriteHotkeyKeyCode
+            case rewriteHotkeyModifiers
+            case rewriteHotkeySidedModifiers
+            case hotkeyTriggerMode
+            case hotkeyDistinguishModifierSides
+            case hotkeyPreset
+            case escapeKeyCancelsOverlaySession
+        }
+
+        init(
+            hotkeyKeyCode: Int,
+            hotkeyModifiers: Int,
+            hotkeySidedModifiers: Int,
+            translationHotkeyKeyCode: Int,
+            translationHotkeyModifiers: Int,
+            translationHotkeySidedModifiers: Int,
+            rewriteHotkeyKeyCode: Int,
+            rewriteHotkeyModifiers: Int,
+            rewriteHotkeySidedModifiers: Int,
+            hotkeyTriggerMode: String,
+            hotkeyDistinguishModifierSides: Bool,
+            hotkeyPreset: String,
+            escapeKeyCancelsOverlaySession: Bool
+        ) {
+            self.hotkeyKeyCode = hotkeyKeyCode
+            self.hotkeyModifiers = hotkeyModifiers
+            self.hotkeySidedModifiers = hotkeySidedModifiers
+            self.translationHotkeyKeyCode = translationHotkeyKeyCode
+            self.translationHotkeyModifiers = translationHotkeyModifiers
+            self.translationHotkeySidedModifiers = translationHotkeySidedModifiers
+            self.rewriteHotkeyKeyCode = rewriteHotkeyKeyCode
+            self.rewriteHotkeyModifiers = rewriteHotkeyModifiers
+            self.rewriteHotkeySidedModifiers = rewriteHotkeySidedModifiers
+            self.hotkeyTriggerMode = hotkeyTriggerMode
+            self.hotkeyDistinguishModifierSides = hotkeyDistinguishModifierSides
+            self.hotkeyPreset = hotkeyPreset
+            self.escapeKeyCancelsOverlaySession = escapeKeyCancelsOverlaySession
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            hotkeyKeyCode = try container.decode(Int.self, forKey: .hotkeyKeyCode)
+            hotkeyModifiers = try container.decode(Int.self, forKey: .hotkeyModifiers)
+            hotkeySidedModifiers = try container.decode(Int.self, forKey: .hotkeySidedModifiers)
+            translationHotkeyKeyCode = try container.decode(Int.self, forKey: .translationHotkeyKeyCode)
+            translationHotkeyModifiers = try container.decode(Int.self, forKey: .translationHotkeyModifiers)
+            translationHotkeySidedModifiers = try container.decode(Int.self, forKey: .translationHotkeySidedModifiers)
+            rewriteHotkeyKeyCode = try container.decode(Int.self, forKey: .rewriteHotkeyKeyCode)
+            rewriteHotkeyModifiers = try container.decode(Int.self, forKey: .rewriteHotkeyModifiers)
+            rewriteHotkeySidedModifiers = try container.decode(Int.self, forKey: .rewriteHotkeySidedModifiers)
+            hotkeyTriggerMode = try container.decode(String.self, forKey: .hotkeyTriggerMode)
+            hotkeyDistinguishModifierSides = try container.decode(Bool.self, forKey: .hotkeyDistinguishModifierSides)
+            hotkeyPreset = try container.decode(String.self, forKey: .hotkeyPreset)
+            escapeKeyCancelsOverlaySession = try container.decodeIfPresent(
+                Bool.self,
+                forKey: .escapeKeyCancelsOverlaySession
+            ) ?? true
+        }
     }
 
     struct SanitizedRemoteProviderConfiguration: Codable {
@@ -584,7 +651,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 7,
+            version: 8,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -636,7 +703,8 @@ enum ConfigurationTransferManager {
                 rewriteHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeySidedModifiers),
                 hotkeyTriggerMode: defaults.string(forKey: AppPreferenceKey.hotkeyTriggerMode) ?? HotkeyPreference.defaultTriggerMode.rawValue,
                 hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
-                hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue
+                hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
+                escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true
             )
         )
     }
@@ -745,6 +813,7 @@ enum ConfigurationTransferManager {
         defaults.set(hotkey.hotkeyTriggerMode, forKey: AppPreferenceKey.hotkeyTriggerMode)
         defaults.set(hotkey.hotkeyDistinguishModifierSides, forKey: AppPreferenceKey.hotkeyDistinguishModifierSides)
         defaults.set(hotkey.hotkeyPreset, forKey: AppPreferenceKey.hotkeyPreset)
+        defaults.set(hotkey.escapeKeyCancelsOverlaySession, forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession)
     }
 
     private static func sanitizeRemoteConfigurations(_ raw: String) -> [SanitizedRemoteProviderConfiguration] {

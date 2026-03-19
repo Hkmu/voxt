@@ -135,7 +135,11 @@ struct GeneralSettingsView: View {
             GeneralModelStorageCard(
                 displayPath: modelStorageDisplayPath.isEmpty ? ModelStorageDirectoryManager.defaultRootURL.path : modelStorageDisplayPath,
                 errorMessage: modelStorageSelectionError,
-                onOpenFinder: ModelStorageDirectoryManager.openRootInFinder,
+                onOpenFinder: {
+                    Task { @MainActor in
+                        ModelStorageDirectoryManager.openRootInFinder()
+                    }
+                },
                 onChoose: chooseModelStorageDirectory
             )
 
