@@ -36,17 +36,46 @@ enum DictionaryTransferManager {
         var term: String
         var groupID: UUID?
         var groupNameSnapshot: String?
+        var replacementTerms: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case term
+            case groupID
+            case groupNameSnapshot
+            case replacementTerms
+        }
+
+        init(
+            term: String,
+            groupID: UUID?,
+            groupNameSnapshot: String?,
+            replacementTerms: [String] = []
+        ) {
+            self.term = term
+            self.groupID = groupID
+            self.groupNameSnapshot = groupNameSnapshot
+            self.replacementTerms = replacementTerms
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            term = try container.decode(String.self, forKey: .term)
+            groupID = try container.decodeIfPresent(UUID.self, forKey: .groupID)
+            groupNameSnapshot = try container.decodeIfPresent(String.self, forKey: .groupNameSnapshot)
+            replacementTerms = try container.decodeIfPresent([String].self, forKey: .replacementTerms) ?? []
+        }
     }
 
     static func exportJSONString(entries: [DictionaryEntry]) throws -> String {
         let payload = Payload(
-            version: 1,
+            version: 2,
             exportedAt: iso8601Formatter.string(from: Date()),
             entries: entries.map {
                 Entry(
                     term: $0.term,
                     groupID: $0.groupID,
-                    groupNameSnapshot: $0.groupNameSnapshot
+                    groupNameSnapshot: $0.groupNameSnapshot,
+                    replacementTerms: $0.replacementTerms.map(\.text)
                 )
             }
         )

@@ -18,6 +18,8 @@ struct DictionarySettingsView: View {
     @State private var selectedFilter: DictionaryFilter = .all
     @State private var dialog: DictionaryDialog?
     @State private var draftTerm = ""
+    @State private var draftReplacementTermInput = ""
+    @State private var draftReplacementTerms: [String] = []
     @State private var selectedGroupID: UUID?
     @State private var errorMessage: String?
     @State private var availableGroups: [AppBranchGroup] = []
@@ -197,6 +199,8 @@ struct DictionarySettingsView: View {
 
                     Button("Create") {
                         draftTerm = ""
+                        draftReplacementTermInput = ""
+                        draftReplacementTerms = []
                         selectedGroupID = nil
                         errorMessage = nil
                         dialog = .create
@@ -222,6 +226,8 @@ struct DictionarySettingsView: View {
                                     scopeIsMissing: entry.groupID != nil && groupName(for: entry.groupID) == nil,
                                     onEdit: {
                                         draftTerm = entry.term
+                                        draftReplacementTermInput = ""
+                                        draftReplacementTerms = entry.replacementTerms.map(\.text)
                                         selectedGroupID = entry.groupID
                                         errorMessage = nil
                                         dialog = .edit(entry)
@@ -268,6 +274,42 @@ struct DictionarySettingsView: View {
             }
             .pickerStyle(.menu)
 
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text("Replacement Match Terms")
+                        .font(.caption.weight(.semibold))
+
+                    Text(" (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    TextField(String(localized: "Replacement Match Term"), text: $draftReplacementTermInput)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(addDraftReplacementTerm)
+
+                    Button("Add") {
+                        addDraftReplacementTerm()
+                    }
+                    .disabled(draftReplacementTermInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                Text("Add phrases that should always resolve to this dictionary term.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if draftReplacementTerms.isEmpty {
+                    Text("No replacement match terms.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    DictionaryEditableTagList(values: draftReplacementTerms) { value in
+                        removeDraftReplacementTerm(value)
+                    }
+                }
+            }
+
             if let errorMessage, !errorMessage.isEmpty {
                 Text(errorMessage)
                     .font(.caption)
@@ -286,7 +328,7 @@ struct DictionarySettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 420)
+        .frame(width: 520)
     }
 
     private func save(dialog: DictionaryDialog) {
@@ -295,6 +337,7 @@ struct DictionarySettingsView: View {
             case .create:
                 try dictionaryStore.createManualEntry(
                     term: draftTerm,
+                    replacementTerms: draftReplacementTerms,
                     groupID: selectedGroupID,
                     groupNameSnapshot: selectedGroupName()
                 )
@@ -302,6 +345,7 @@ struct DictionarySettingsView: View {
                 try dictionaryStore.updateEntry(
                     id: entry.id,
                     term: draftTerm,
+                    replacementTerms: draftReplacementTerms,
                     groupID: selectedGroupID,
                     groupNameSnapshot: selectedGroupName() ?? entry.groupNameSnapshot
                 )
@@ -311,6 +355,36 @@ struct DictionarySettingsView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func addDraftReplacementTerm() {
+        let display = draftReplacementTermInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = DictionaryStore.normalizeTerm(display)
+        guard !display.isEmpty, !normalized.isEmpty else {
+            errorMessage = AppLocalization.localizedString("Replacement match term cannot be empty.")
+            return
+        }
+
+        if normalized == DictionaryStore.normalizeTerm(draftTerm) {
+            errorMessage = AppLocalization.localizedString("Replacement match term cannot be the same as the dictionary term.")
+            return
+        }
+
+        if draftReplacementTerms.contains(where: { DictionaryStore.normalizeTerm($0) == normalized }) {
+            draftReplacementTermInput = ""
+            return
+        }
+
+        draftReplacementTerms.append(display)
+        draftReplacementTerms.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        draftReplacementTermInput = ""
+        errorMessage = nil
+    }
+
+    private func removeDraftReplacementTerm(_ value: String) {
+        let normalized = DictionaryStore.normalizeTerm(value)
+        draftReplacementTerms.removeAll { DictionaryStore.normalizeTerm($0) == normalized }
+        errorMessage = nil
     }
 
     private func reloadContent() {
