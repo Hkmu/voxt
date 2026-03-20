@@ -176,19 +176,19 @@ extension AppEnhancementSettingsView {
             return
         }
 
-        let canonicalEntries = entries.map(canonicalizedPattern)
-        let normalizedInput = canonicalEntries.map(normalizedPattern)
+        let canonicalEntries = entries.map(AppBranchURLPatternService.canonicalizedPattern)
+        let normalizedInput = canonicalEntries.map(AppBranchURLPatternService.normalizedPattern)
         if Set(normalizedInput).count != normalizedInput.count {
             modalErrorMessage = AppLocalization.localizedString("Duplicate URL patterns detected in input.")
             return
         }
 
-        if let invalid = canonicalEntries.first(where: { !isValidWildcardURLPattern($0) }) {
+        if let invalid = canonicalEntries.first(where: { !AppBranchURLPatternService.isValidWildcardURLPattern($0) }) {
             modalErrorMessage = AppLocalization.format("Invalid URL pattern: %@. Use wildcard format like google.com/*.", invalid)
             return
         }
 
-        let existing = Set(urlItems.map { normalizedPattern($0.pattern) })
+        let existing = Set(urlItems.map { AppBranchURLPatternService.normalizedPattern($0.pattern) })
         if normalizedInput.contains(where: { existing.contains($0) }) {
             modalErrorMessage = AppLocalization.localizedString("Some URL patterns already exist.")
             return
@@ -200,19 +200,19 @@ extension AppEnhancementSettingsView {
     }
 
     func saveEditedURL(urlID: UUID) {
-        let canonical = canonicalizedPattern(urlDraft)
+        let canonical = AppBranchURLPatternService.canonicalizedPattern(urlDraft)
         guard !canonical.isEmpty else {
             modalErrorMessage = AppLocalization.localizedString("URL pattern is required.")
             return
         }
 
-        guard isValidWildcardURLPattern(canonical) else {
+        guard AppBranchURLPatternService.isValidWildcardURLPattern(canonical) else {
             modalErrorMessage = AppLocalization.localizedString("Invalid URL pattern. Use wildcard format like google.com/*.")
             return
         }
 
-        let normalized = normalizedPattern(canonical)
-        let others = Set(urlItems.filter { $0.id != urlID }.map { normalizedPattern($0.pattern) })
+        let normalized = AppBranchURLPatternService.normalizedPattern(canonical)
+        let others = Set(urlItems.filter { $0.id != urlID }.map { AppBranchURLPatternService.normalizedPattern($0.pattern) })
         if others.contains(normalized) {
             modalErrorMessage = AppLocalization.localizedString("URL pattern already exists.")
             return
@@ -227,34 +227,15 @@ extension AppEnhancementSettingsView {
     }
 
     func canonicalizedPattern(_ value: String) -> String {
-        var normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if normalized.hasPrefix("https://") {
-            normalized.removeFirst("https://".count)
-        } else if normalized.hasPrefix("http://") {
-            normalized.removeFirst("http://".count)
-        }
-        if !normalized.contains("/") {
-            normalized += "/*"
-        } else if normalized.hasSuffix("/") {
-            normalized += "*"
-        }
-        return normalized
+        AppBranchURLPatternService.canonicalizedPattern(value)
     }
 
     func normalizedPattern(_ value: String) -> String {
-        canonicalizedPattern(value)
+        AppBranchURLPatternService.normalizedPattern(value)
     }
 
     func isValidWildcardURLPattern(_ pattern: String) -> Bool {
-        let value = normalizedPattern(pattern)
-        guard !value.isEmpty else { return false }
-        guard !value.contains("://") else { return false }
-        guard !value.contains(" ") else { return false }
-        guard value.contains(".") else { return false }
-        guard value.contains("/") else { return false }
-
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-._/*")
-        return value.unicodeScalars.allSatisfy { allowed.contains($0) }
+        AppBranchURLPatternService.isValidWildcardURLPattern(pattern)
     }
 
     func loadPersistedGroups() {
