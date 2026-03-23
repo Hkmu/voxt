@@ -6,6 +6,21 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-03-23
+
+### Added
+- Added a separate on-device Whisper engine powered by WhisperKit, with built-in Whisper model downloads and configurable realtime, VAD, timestamp, and temperature options.
+- Added Meeting Notes (Beta), a dedicated long-running meeting capture flow with its own shortcut, floating meeting card, Meeting history entries, and detail window review/export support.
+- Added meeting-specific Remote ASR setup for Doubao ASR and Aliyun Bailian ASR, including dedicated Meeting ASR model selection and request-path testing.
+
+### Changed
+- Refined the meeting capture experience with clearer model initialization states, pause/resume controls, timestamped segments, click-to-copy, and smoother long-running overlay behavior.
+- Expanded localization and configuration transfer coverage for the new meeting workflow and Whisper settings across English, Simplified Chinese, and Japanese.
+
+### Fixed
+- Fixed `fn` hotkey recovery after idle and hardened recording start handling so shortcut-triggered capture sessions resume more reliably.
+- Improved Whisper startup and meeting control stability during longer transcription sessions.
+
 ## [1.6.6] - 2026-03-20
 
 ### Added
