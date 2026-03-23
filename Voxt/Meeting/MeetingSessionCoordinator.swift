@@ -250,6 +250,8 @@ final class MeetingSessionCoordinator {
 
     private func handleBuffer(_ buffer: AVAudioPCMBuffer, level: Float, speaker: MeetingSpeaker) {
         guard overlayState.isRecording || isStarting else { return }
+        let sampleRate = buffer.format.sampleRate
+        let bufferEndSeconds = currentTimelineOffsetSeconds()
         if speaker == .me {
             micLevel = level
             if loggedInitialBufferSpeakers.contains(.me) == false {
@@ -290,7 +292,6 @@ final class MeetingSessionCoordinator {
             }
             return
         }
-        let sampleRate = buffer.format.sampleRate
 
         let task = Task { [weak self] in
             guard let self else { return }
@@ -316,9 +317,19 @@ final class MeetingSessionCoordinator {
             }
             let chunk: BufferedMeetingChunk?
             if speaker == .me {
-                chunk = await self.micAccumulator.append(samples: samples, sampleRate: sampleRate, level: level)
+                chunk = await self.micAccumulator.append(
+                    samples: samples,
+                    sampleRate: sampleRate,
+                    level: level,
+                    bufferEndSeconds: bufferEndSeconds
+                )
             } else {
-                chunk = await self.systemAccumulator.append(samples: samples, sampleRate: sampleRate, level: level)
+                chunk = await self.systemAccumulator.append(
+                    samples: samples,
+                    sampleRate: sampleRate,
+                    level: level,
+                    bufferEndSeconds: bufferEndSeconds
+                )
             }
             guard let chunk else { return }
             await MainActor.run {
@@ -528,10 +539,11 @@ final class MeetingSessionCoordinator {
 
         guard liveSessions.isEmpty else { return }
 
-        if let micChunk = await micAccumulator.finish() {
+        let timelineEndSeconds = currentTimelineOffsetSeconds()
+        if let micChunk = await micAccumulator.finish(at: timelineEndSeconds) {
             await enqueue(chunk: micChunk)
         }
-        if let systemChunk = await systemAccumulator.finish() {
+        if let systemChunk = await systemAccumulator.finish(at: timelineEndSeconds) {
             await enqueue(chunk: systemChunk)
         }
     }

@@ -30,7 +30,6 @@ actor MeetingChunkAccumulator {
     private let speechThreshold: Float
     private let config: MeetingChunkingProfile.Configuration
 
-    private var totalSamples: Int = 0
     private var currentSamples: [Float] = []
     private var currentStartSeconds: TimeInterval?
     private var currentSampleRate: Double = Double(WhisperKit.sampleRate)
@@ -59,11 +58,15 @@ actor MeetingChunkAccumulator {
         }
     }
 
-    func append(samples: [Float], sampleRate: Double, level: Float) -> BufferedMeetingChunk? {
+    func append(
+        samples: [Float],
+        sampleRate: Double,
+        level: Float,
+        bufferEndSeconds: TimeInterval
+    ) -> BufferedMeetingChunk? {
         guard !samples.isEmpty, sampleRate > 0 else { return nil }
-        let bufferStartSeconds = Double(totalSamples) / sampleRate
         let bufferDuration = Double(samples.count) / sampleRate
-        totalSamples += samples.count
+        let bufferStartSeconds = max(bufferEndSeconds - bufferDuration, 0)
 
         if currentStartSeconds == nil {
             guard level >= speechThreshold else { return nil }
@@ -121,8 +124,8 @@ actor MeetingChunkAccumulator {
         return nil
     }
 
-    func finish() -> BufferedMeetingChunk? {
-        flushCurrent(endSeconds: Double(totalSamples) / max(currentSampleRate, 1))
+    func finish(at endSeconds: TimeInterval) -> BufferedMeetingChunk? {
+        flushCurrent(endSeconds: endSeconds)
     }
 
     private func flushCurrent(endSeconds: TimeInterval) -> BufferedMeetingChunk? {
