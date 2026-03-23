@@ -268,6 +268,19 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         }
     }
 
+    func restartCaptureForPreferredInputDevice() throws {
+        guard isRecording else { return }
+        guard !whisperRealtimeEnabled else {
+            throw NSError(
+                domain: "Voxt.WhisperKitTranscriber",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Whisper realtime capture cannot be hot-swapped safely."]
+            )
+        }
+        try startAudioCaptureGraph()
+        scheduleCaptureStartupWatchdog(revision: sessionRevision)
+    }
+
     private func startRealtimeRecordingSession(revision: Int) async -> String? {
         guard let whisper = preparedWhisper else {
             return String(localized: "Whisper is not ready yet. Open Settings > Model and try again.")

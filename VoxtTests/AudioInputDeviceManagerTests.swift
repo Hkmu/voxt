@@ -5,8 +5,8 @@ import CoreAudio
 final class AudioInputDeviceManagerTests: XCTestCase {
     func testPreferredDeviceWinsWhenAvailable() {
         let devices = [
-            AudioInputDevice(id: 10, name: "Mic A"),
-            AudioInputDevice(id: 20, name: "Mic B")
+            AudioInputDevice(id: 10, uid: "mic-a", name: "Mic A"),
+            AudioInputDevice(id: 20, uid: "mic-b", name: "Mic B")
         ]
 
         let resolved = AudioInputDeviceManager.resolvedInputDeviceID(
@@ -20,8 +20,8 @@ final class AudioInputDeviceManagerTests: XCTestCase {
 
     func testDefaultDeviceFallbackIsUsedWhenPreferredMissing() {
         let devices = [
-            AudioInputDevice(id: 10, name: "Mic A"),
-            AudioInputDevice(id: 20, name: "Mic B")
+            AudioInputDevice(id: 10, uid: "mic-a", name: "Mic A"),
+            AudioInputDevice(id: 20, uid: "mic-b", name: "Mic B")
         ]
 
         let resolved = AudioInputDeviceManager.resolvedInputDeviceID(
@@ -35,8 +35,8 @@ final class AudioInputDeviceManagerTests: XCTestCase {
 
     func testFirstDeviceFallbackIsUsedWhenNothingElseMatches() {
         let devices = [
-            AudioInputDevice(id: 10, name: "Mic A"),
-            AudioInputDevice(id: 20, name: "Mic B")
+            AudioInputDevice(id: 10, uid: "mic-a", name: "Mic A"),
+            AudioInputDevice(id: 20, uid: "mic-b", name: "Mic B")
         ]
 
         let resolved = AudioInputDeviceManager.resolvedInputDeviceID(
@@ -48,4 +48,3 @@ final class AudioInputDeviceManagerTests: XCTestCase {
         XCTAssertEqual(resolved, 10)
     }
 }
-

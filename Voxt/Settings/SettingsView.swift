@@ -22,6 +22,7 @@ struct SettingsView: View {
     @State private var selectedTab: SettingsTab
     @State private var navigationRequest: SettingsNavigationRequest?
     @State private var hasMissingPermissions = false
+    @State private var hasNoAvailableMicrophones = false
     @State private var missingModelConfigurationIssues: [ConfigurationTransferManager.MissingConfigurationIssue] = []
     @State private var languageRefreshToken = UUID()
     private let issueRefreshTimer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
@@ -65,11 +66,18 @@ struct SettingsView: View {
                     },
                     appEnhancementEnabled: appEnhancementEnabled,
                     hasMissingPermissions: hasMissingPermissions,
+                    hasNoAvailableMicrophones: hasNoAvailableMicrophones,
                     hasMissingModelConfigurationIssues: !missingModelConfigurationIssues.isEmpty,
                     updateBadgeState: updateBadgeState,
                     onTapPermissionBadge: {
                         navigationRequest = nil
                         selectedTab = .permissions
+                    },
+                    onTapMicrophoneBadge: {
+                        selectedTab = .general
+                        navigationRequest = SettingsNavigationRequest(
+                            target: SettingsNavigationTarget(tab: .general, section: .generalAudio)
+                        )
                     },
                     onTapModelBadge: {
                         navigationRequest = nil
@@ -102,11 +110,16 @@ struct SettingsView: View {
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             refreshPermissionBadge()
+            refreshMicrophoneBadge()
             refreshModelConfigurationBadge()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionBadge()
+            refreshMicrophoneBadge()
             refreshModelConfigurationBadge()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtAudioInputDevicesDidChange)) { _ in
+            refreshMicrophoneBadge()
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtSettingsSelectTab)) { notification in
             guard let target = SettingsNavigationTarget(notification: notification)
@@ -292,6 +305,10 @@ struct SettingsView: View {
         )
     }
 
+    private func refreshMicrophoneBadge() {
+        hasNoAvailableMicrophones = AudioInputDeviceManager.availableInputDevices().isEmpty
+    }
+
 }
 
 private struct SettingsSidebar: View {
@@ -299,9 +316,11 @@ private struct SettingsSidebar: View {
     let onSelectTab: (SettingsTab) -> Void
     let appEnhancementEnabled: Bool
     let hasMissingPermissions: Bool
+    let hasNoAvailableMicrophones: Bool
     let hasMissingModelConfigurationIssues: Bool
     let updateBadgeState: UpdateBadgeState
     let onTapPermissionBadge: () -> Void
+    let onTapMicrophoneBadge: () -> Void
     let onTapModelBadge: () -> Void
     let onTapUpdateBadge: () -> Void
 
@@ -340,6 +359,31 @@ private struct SettingsSidebar: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.red)
                         Text(String(localized: "Permissions Disabled"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.red)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.red.opacity(0.10))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if hasNoAvailableMicrophones {
+                Button(action: onTapMicrophoneBadge) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "mic.slash.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.red)
+                        Text(String(localized: "No Microphone Available"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.red)
                         Spacer(minLength: 0)

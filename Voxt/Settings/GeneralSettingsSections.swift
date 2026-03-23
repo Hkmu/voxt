@@ -26,13 +26,14 @@ struct GeneralConfigurationCard: View {
 }
 
 struct GeneralAudioCard: View {
-    let inputDevices: [AudioInputDevice]
-    @Binding var selectedInputDeviceIDRaw: Int
+    let microphoneState: MicrophoneResolvedState
     @Binding var interactionSoundsEnabled: Bool
     @Binding var muteSystemAudioWhileRecording: Bool
     let systemAudioPermissionMessage: String?
     @Binding var interactionSoundPreset: InteractionSoundPreset
     let onTrySound: () -> Void
+    let onManageMicrophones: () -> Void
+    let onViewPriorityList: () -> Void
 
     var body: some View {
         GeneralSettingsCard(title: "Audio") {
@@ -40,14 +41,47 @@ struct GeneralAudioCard: View {
                 Text("Microphone")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Picker("Microphone", selection: $selectedInputDeviceIDRaw) {
-                    ForEach(inputDevices) { device in
-                        Text(device.name).tag(Int(device.id))
+                if microphoneState.hasAvailableDevices {
+                    Button(action: onManageMicrophones) {
+                        HStack(spacing: 8) {
+                            Text(microphoneState.activeDevice?.name ?? String(localized: "No available microphone devices"))
+                                .lineLimit(1)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 30)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color(nsColor: .controlBackgroundColor))
+                        )
                     }
+                    .buttonStyle(.plain)
+                    .frame(width: 320, alignment: .trailing)
+                } else {
+                    Text(String(localized: "No available microphone devices"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.red.opacity(0.10))
+                        )
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 260, alignment: .trailing)
+            }
+
+            Text("Reorder microphones to control device priority. Auto Switch only applies when devices connect or disconnect.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !microphoneState.hasAvailableDevices, microphoneState.hasTrackedDevices {
+                HStack {
+                    Spacer()
+                    Button("View Priority List", action: onViewPriorityList)
+                        .buttonStyle(.link)
+                }
             }
 
             Toggle("Interaction Sounds", isOn: $interactionSoundsEnabled)

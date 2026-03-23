@@ -65,13 +65,23 @@ extension AppDelegate {
 
     private func buildMicrophoneMenu() -> NSMenu {
         let submenu = NSMenu()
-        let resolvedSelectedID = selectedInputDeviceID
+        let resolvedSelectedUID = selectedInputDeviceUID
+
+        let autoSwitchItem = NSMenuItem(
+            title: AppLocalization.localizedString("Auto Switch"),
+            action: #selector(toggleMicrophoneAutoSwitch(_:)),
+            keyEquivalent: ""
+        )
+        autoSwitchItem.target = self
+        autoSwitchItem.state = microphoneResolvedState.autoSwitchEnabled ? .on : .off
+        submenu.addItem(autoSwitchItem)
+        submenu.addItem(NSMenuItem.separator())
 
         for device in inputDevicesSnapshot {
             let item = NSMenuItem(title: device.name, action: #selector(selectMicrophoneFromMenu(_:)), keyEquivalent: "")
             item.target = self
-            item.tag = Int(device.id)
-            item.state = device.id == resolvedSelectedID ? .on : .off
+            item.representedObject = device.uid
+            item.state = device.uid == resolvedSelectedUID ? .on : .off
             submenu.addItem(item)
         }
 
@@ -110,28 +120,27 @@ extension AppDelegate {
 
     private func applyInputDevicesSnapshot(_ devices: [AudioInputDevice], reason: String) {
         let previousDevices = inputDevicesSnapshot
-        let previousSelectedID = selectedInputDeviceID
+        let previousSelectedUID = selectedInputDeviceUID
         inputDevicesSnapshot = devices
-        let resolvedSelectedID = AudioInputDeviceManager.resolvedInputDeviceID(
-            from: devices,
-            preferredID: previousSelectedID
+        let resolvedState = MicrophonePreferenceManager.syncState(
+            defaults: .standard,
+            availableDevices: devices,
+            previousAvailableUIDs: previousDevices.isEmpty ? nil : Set(previousDevices.map(\.uid))
         )
-
-        let resolvedSelectedRaw = resolvedSelectedID.map(Int.init) ?? 0
-        if Int(previousSelectedID ?? 0) != resolvedSelectedRaw {
-            UserDefaults.standard.set(resolvedSelectedRaw, forKey: AppPreferenceKey.selectedInputDeviceID)
-        }
+        microphoneResolvedState = resolvedState
 
         let devicesChanged = previousDevices != devices
-        let selectionChanged = previousSelectedID != resolvedSelectedID
+        let selectionChanged = previousSelectedUID != resolvedState.activeUID
         guard devicesChanged || selectionChanged else { return }
 
         if devicesChanged {
             NotificationCenter.default.post(name: .voxtAudioInputDevicesDidChange, object: nil)
         }
 
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+
         VoxtLog.info(
-            "Audio input snapshot refreshed. reason=\(reason), devices=\(devices.count), selected=\(resolvedSelectedRaw)",
+            "Audio input snapshot refreshed. reason=\(reason), devices=\(devices.count), selected=\(resolvedState.activeUID ?? "none"), autoSwitch=\(resolvedState.autoSwitchEnabled)",
             verbose: true
         )
         buildMenu()
@@ -170,8 +179,81 @@ extension AppDelegate {
     }
 
     @objc private func selectMicrophoneFromMenu(_ sender: NSMenuItem) {
-        UserDefaults.standard.set(sender.tag, forKey: AppPreferenceKey.selectedInputDeviceID)
+        guard let uid = sender.representedObject as? String else { return }
+        if let device = inputDevicesSnapshot.first(where: { $0.uid == uid }) {
+            VoxtLog.info("Microphone focus changed from tray menu. uid=\(uid), name=\(device.name)")
+        } else {
+            VoxtLog.info("Microphone focus changed from tray menu. uid=\(uid)")
+        }
+        microphoneResolvedState = MicrophonePreferenceManager.setFocusedDevice(
+            uid: uid,
+            defaults: .standard,
+            availableDevices: inputDevicesSnapshot
+        )
         NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+        buildMenu()
+    }
+
+    @objc private func toggleMicrophoneAutoSwitch(_ sender: NSMenuItem) {
+        let newValue = sender.state != .on
+        VoxtLog.info("Microphone auto switch updated from tray menu. enabled=\(newValue)")
+        microphoneResolvedState = MicrophonePreferenceManager.setAutoSwitchEnabled(
+            newValue,
+            defaults: .standard,
+            availableDevices: inputDevicesSnapshot
+        )
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+        buildMenu()
+    }
+
+    func applyMicrophonePriorityOrder(_ orderedUIDs: [String]) {
+        microphoneResolvedState = MicrophonePreferenceManager.reorderPriority(
+            orderedUIDs: orderedUIDs,
+            defaults: .standard,
+            availableDevices: inputDevicesSnapshot
+        )
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+        buildMenu()
+    }
+
+    func selectMicrophoneManually(uid: String) {
+        if let device = inputDevicesSnapshot.first(where: { $0.uid == uid }) {
+            VoxtLog.info("Microphone focus changed. uid=\(uid), name=\(device.name)")
+        } else {
+            VoxtLog.info("Microphone focus changed. uid=\(uid)")
+        }
+        microphoneResolvedState = MicrophonePreferenceManager.setFocusedDevice(
+            uid: uid,
+            defaults: .standard,
+            availableDevices: inputDevicesSnapshot
+        )
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+        buildMenu()
+    }
+
+    func handleResolvedMicrophoneStateChange(
+        from previousState: MicrophoneResolvedState,
+        to newState: MicrophoneResolvedState,
+        reason: String
+    ) {
+        guard previousState.activeUID != newState.activeUID else {
+            applyPreferredInputDevice()
+            return
+        }
+
+        if let activeDevice = newState.activeDevice {
+            VoxtLog.info(
+                "Resolved microphone changed. reason=\(reason), uid=\(activeDevice.uid), name=\(activeDevice.name), autoSwitch=\(newState.autoSwitchEnabled)"
+            )
+        } else {
+            VoxtLog.warning("Resolved microphone cleared. reason=\(reason)")
+        }
+
+        handlePreferredInputDeviceChange(
+            previousUID: previousState.activeUID,
+            newUID: newState.activeUID,
+            reason: reason
+        )
     }
 
     func presentMainWindowOnLaunchIfNeeded() {

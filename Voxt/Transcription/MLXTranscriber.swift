@@ -104,34 +104,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         isModelInitializing = modelManager.state != .ready
 
         do {
-            let inputNode = audioEngine.inputNode
-            applyPreferredInputDeviceIfNeeded(inputNode: inputNode)
-            let recordingFormat = inputNode.outputFormat(forBus: 0)
-            inputSampleRate = recordingFormat.sampleRate
-            let sampleStore = self.sampleStore
-
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-                guard let self, let channelData = buffer.floatChannelData?[0] else { return }
-
-                let frameLength = Int(buffer.frameLength)
-                let samples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))
-                sampleStore.append(samples)
-
-                if frameLength > 0 {
-                    var rms: Float = 0
-                    for i in 0..<frameLength {
-                        rms += channelData[i] * channelData[i]
-                    }
-                    rms = sqrt(rms / Float(frameLength))
-                    let normalized = min(rms * 20, 1.0)
-                    Task { @MainActor [weak self] in
-                        self?.audioLevel = normalized
-                    }
-                }
-            }
-
-            audioEngine.prepare()
-            try audioEngine.start()
+            try startAudioCaptureGraph()
             isRecording = true
 
             let revision = sessionRevision
@@ -181,6 +154,11 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 sampleRate: sampleRate
             )
         }
+    }
+
+    func restartCaptureForPreferredInputDevice() throws {
+        guard isRecording else { return }
+        try startAudioCaptureGraph()
     }
 
     private func runIntermediateCorrectionLoop(revision: Int) async {
@@ -318,6 +296,43 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         if audioEngine.isRunning {
             audioEngine.stop()
         }
+    }
+
+    private func startAudioCaptureGraph() throws {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        let inputNode = audioEngine.inputNode
+        inputNode.removeTap(onBus: 0)
+
+        applyPreferredInputDeviceIfNeeded(inputNode: inputNode)
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        inputSampleRate = recordingFormat.sampleRate
+        let sampleStore = self.sampleStore
+
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            guard let self, let channelData = buffer.floatChannelData?[0] else { return }
+
+            let frameLength = Int(buffer.frameLength)
+            let samples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))
+            sampleStore.append(samples)
+
+            if frameLength > 0 {
+                var rms: Float = 0
+                for i in 0..<frameLength {
+                    rms += channelData[i] * channelData[i]
+                }
+                rms = sqrt(rms / Float(frameLength))
+                let normalized = min(rms * 20, 1.0)
+                Task { @MainActor [weak self] in
+                    self?.audioLevel = normalized
+                }
+            }
+        }
+
+        audioEngine.prepare()
+        try audioEngine.start()
     }
 
     private func cancelActiveTasks() {

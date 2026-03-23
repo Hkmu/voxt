@@ -95,6 +95,19 @@ class SpeechTranscriber: ObservableObject, TranscriberProtocol {
         }
     }
 
+    func restartCaptureForPreferredInputDevice() throws {
+        guard isRecording else { return }
+        guard let recognizer = speechRecognizer else {
+            throw NSError(
+                domain: "Voxt.SpeechTranscriber",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Speech recognizer is unavailable."]
+            )
+        }
+        stopAudioCapture()
+        try startSpeechRecognition(recognizer: recognizer)
+    }
+
     private func cleanupSessionState() {
         finalizeTimeoutTask?.cancel()
         finalizeTimeoutTask = nil

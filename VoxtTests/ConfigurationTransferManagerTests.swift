@@ -8,6 +8,15 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         let sourceEnvironment = TestEnvironmentFactory.configurationTransferEnvironment(in: sourceDirectory)
 
         sourceDefaults.set(AppInterfaceLanguage.english.rawValue, forKey: AppPreferenceKey.interfaceLanguage)
+        sourceDefaults.set("builtin-mic", forKey: AppPreferenceKey.activeInputDeviceUID)
+        sourceDefaults.set(false, forKey: AppPreferenceKey.microphoneAutoSwitchEnabled)
+        sourceDefaults.set(["usb-mic", "builtin-mic"], forKey: AppPreferenceKey.microphonePriorityUIDs)
+        sourceDefaults.set(
+            """
+            [{"uid":"usb-mic","lastKnownName":"USB Mic"},{"uid":"builtin-mic","lastKnownName":"Built-in Mic"}]
+            """,
+            forKey: AppPreferenceKey.trackedMicrophoneRecords
+        )
         sourceDefaults.set(UserMainLanguageOption.storageValue(for: ["zh-TW", "en"]), forKey: AppPreferenceKey.userMainLanguageCodes)
         sourceDefaults.set(TranscriptionEngine.whisperKit.rawValue, forKey: AppPreferenceKey.transcriptionEngine)
         sourceDefaults.set("small", forKey: AppPreferenceKey.whisperModelID)
@@ -62,6 +71,16 @@ final class ConfigurationTransferManagerTests: XCTestCase {
             UserMainLanguageOption.storedSelection(from: targetDefaults.string(forKey: AppPreferenceKey.userMainLanguageCodes)),
             ["zh-hant", "en"]
         )
+        XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.activeInputDeviceUID), "builtin-mic")
+        XCTAssertFalse(targetDefaults.bool(forKey: AppPreferenceKey.microphoneAutoSwitchEnabled))
+        XCTAssertEqual(targetDefaults.stringArray(forKey: AppPreferenceKey.microphonePriorityUIDs), ["usb-mic", "builtin-mic"])
+        XCTAssertEqual(
+            MicrophonePreferenceManager.trackedRecords(defaults: targetDefaults),
+            [
+                TrackedMicrophoneRecord(uid: "usb-mic", lastKnownName: "USB Mic"),
+                TrackedMicrophoneRecord(uid: "builtin-mic", lastKnownName: "Built-in Mic")
+            ]
+        )
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.transcriptionEngine), TranscriptionEngine.whisperKit.rawValue)
         XCTAssertEqual(targetDefaults.string(forKey: AppPreferenceKey.whisperModelID), "small")
         XCTAssertEqual(targetDefaults.double(forKey: AppPreferenceKey.whisperTemperature), 0.4, accuracy: 0.0001)
@@ -94,6 +113,12 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         {
           "interfaceLanguage": "system",
           "selectedInputDeviceID": 0,
+          "activeInputDeviceUID": "usb-mic",
+          "microphoneAutoSwitchEnabled": false,
+          "microphonePriorityUIDs": ["usb-mic", "builtin-mic"],
+          "trackedMicrophoneRecords": [
+            { "uid": "usb-mic", "lastKnownName": "USB Mic" }
+          ],
           "interactionSoundsEnabled": true,
           "interactionSoundPreset": "",
           "overlayPosition": "bottom",
@@ -123,6 +148,10 @@ final class ConfigurationTransferManagerTests: XCTestCase {
         )
 
         XCTAssertFalse(decoded.muteSystemAudioWhileRecording)
+        XCTAssertEqual(decoded.activeInputDeviceUID, "usb-mic")
+        XCTAssertFalse(decoded.microphoneAutoSwitchEnabled)
+        XCTAssertEqual(decoded.microphonePriorityUIDs, ["usb-mic", "builtin-mic"])
+        XCTAssertEqual(decoded.trackedMicrophoneRecords, [TrackedMicrophoneRecord(uid: "usb-mic", lastKnownName: "USB Mic")])
         XCTAssertEqual(decoded.overlayCardOpacity, 82)
         XCTAssertEqual(decoded.userMainLanguageCodes, UserMainLanguageOption.defaultSelectionCodes())
         XCTAssertEqual(decoded.meetingRealtimeTranslationTargetLanguage, "")

@@ -504,6 +504,14 @@ final class MeetingSessionCoordinator {
         }
     }
 
+    func switchMicrophoneInput(to deviceID: AudioDeviceID?) throws {
+        microphoneStartupWatchdogTask?.cancel()
+        microphoneCapture.stop()
+        microphoneCapture.setPreferredInputDevice(deviceID)
+        try startMicrophoneCapture(with: deviceID)
+        scheduleMicrophoneStartupWatchdog(with: deviceID)
+    }
+
     private func finalizeCurrentRecordingSlice() {
         if let recordingStartedAt {
             accumulatedRecordingDuration += max(Date().timeIntervalSince(recordingStartedAt), 0)

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 import Combine
 import zlib
 
@@ -44,7 +45,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     private var transcribeTask: Task<Void, Never>?
     private var stopRequested = false
     private var activeProvider: RemoteASRProvider?
+    private var preferredInputDeviceID: AudioDeviceID?
     private let streamingFinalWaitTimeout: TimeInterval = 20
+
+    func setPreferredInputDevice(_ deviceID: AudioDeviceID?) {
+        preferredInputDeviceID = deviceID
+    }
 
     func requestPermissions() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .audio)
@@ -181,6 +187,33 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             }
             try? FileManager.default.removeItem(at: fileURL)
         }
+    }
+
+    func restartCaptureForPreferredInputDevice() throws {
+        if let context = doubaoStreamingContext {
+            stopDoubaoAudioCapture()
+            try startDoubaoAudioCapture()
+            _ = context
+            return
+        }
+
+        if let context = aliyunStreamingContext {
+            stopAliyunAudioCapture()
+            try startAliyunAudioCapture(context: context)
+            return
+        }
+
+        if let context = aliyunQwenStreamingContext {
+            stopAliyunAudioCapture()
+            try startAliyunQwenAudioCapture(context: context)
+            return
+        }
+
+        throw NSError(
+            domain: "Voxt.RemoteASR",
+            code: -101,
+            userInfo: [NSLocalizedDescriptionKey: "Remote ASR file recording cannot switch microphones during an active session."]
+        )
     }
 
     private func stopDoubaoStreaming(_ context: DoubaoStreamingContext) {
@@ -825,6 +858,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     private func startAliyunAudioCapture(context: AliyunFunStreamingContext) throws {
         let inputNode = audioEngine.inputNode
+        applyPreferredInputDeviceIfNeeded(inputNode: inputNode)
         let inputFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
@@ -1013,6 +1047,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     private func startAliyunQwenAudioCapture(context: AliyunQwenStreamingContext) throws {
         let inputNode = audioEngine.inputNode
+        applyPreferredInputDeviceIfNeeded(inputNode: inputNode)
         let inputFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
@@ -1298,6 +1333,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
 
     private func startDoubaoAudioCapture() throws {
         let inputNode = audioEngine.inputNode
+        applyPreferredInputDeviceIfNeeded(inputNode: inputNode)
         let inputFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
@@ -1344,6 +1380,23 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         audioLevel = 0
+    }
+
+    private func applyPreferredInputDeviceIfNeeded(inputNode: AVAudioInputNode) {
+        guard let preferredInputDeviceID else { return }
+        guard let audioUnit = inputNode.audioUnit else { return }
+        var deviceID = preferredInputDeviceID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &deviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+        if status != noErr {
+            VoxtLog.warning("Remote ASR failed to switch preferred input device. status=\(status)")
+        }
     }
 
     private func receiveDoubaoMessages(

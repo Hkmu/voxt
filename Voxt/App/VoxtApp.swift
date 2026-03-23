@@ -315,6 +315,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var localEscapeKeyMonitor: Any?
     var inputDevicesRefreshTask: Task<Void, Never>?
     var inputDevicesSnapshot: [AudioInputDevice] = []
+    var microphoneResolvedState = MicrophoneResolvedState.empty
 
     var isSessionActive = false
     var pendingSessionFinishTask: Task<Void, Never>?
@@ -510,7 +511,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.buildMenu()
+                guard let self else { return }
+                let previousState = self.microphoneResolvedState
+                self.microphoneResolvedState = MicrophonePreferenceManager.syncState(
+                    defaults: .standard,
+                    availableDevices: self.inputDevicesSnapshot
+                )
+                self.handleResolvedMicrophoneStateChange(
+                    from: previousState,
+                    to: self.microphoneResolvedState,
+                    reason: "microphone preferences updated"
+                )
+                self.buildMenu()
             }
         }
         interfaceLanguageObserver = NotificationCenter.default.addObserver(

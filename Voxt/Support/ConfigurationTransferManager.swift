@@ -51,6 +51,10 @@ enum ConfigurationTransferManager {
     struct GeneralSettings: Codable {
         var interfaceLanguage: String
         var selectedInputDeviceID: Int
+        var activeInputDeviceUID: String?
+        var microphoneAutoSwitchEnabled: Bool
+        var microphonePriorityUIDs: [String]
+        var trackedMicrophoneRecords: [TrackedMicrophoneRecord]
         var modelStorageRootPath: String
         var interactionSoundsEnabled: Bool
         var interactionSoundPreset: String
@@ -89,6 +93,10 @@ enum ConfigurationTransferManager {
         private enum CodingKeys: String, CodingKey {
             case interfaceLanguage
             case selectedInputDeviceID
+            case activeInputDeviceUID
+            case microphoneAutoSwitchEnabled
+            case microphonePriorityUIDs
+            case trackedMicrophoneRecords
             case modelStorageRootPath
             case interactionSoundsEnabled
             case interactionSoundPreset
@@ -125,9 +133,17 @@ enum ConfigurationTransferManager {
             case customProxyPassword
         }
 
+        private enum LegacyCodingKeys: String, CodingKey {
+            case manualSelectedInputDeviceUID
+        }
+
         init(
             interfaceLanguage: String,
             selectedInputDeviceID: Int,
+            activeInputDeviceUID: String?,
+            microphoneAutoSwitchEnabled: Bool,
+            microphonePriorityUIDs: [String],
+            trackedMicrophoneRecords: [TrackedMicrophoneRecord],
             modelStorageRootPath: String,
             interactionSoundsEnabled: Bool,
             interactionSoundPreset: String,
@@ -165,6 +181,11 @@ enum ConfigurationTransferManager {
         ) {
             self.interfaceLanguage = interfaceLanguage
             self.selectedInputDeviceID = selectedInputDeviceID
+            let trimmedActiveUID = activeInputDeviceUID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            self.activeInputDeviceUID = trimmedActiveUID.isEmpty ? nil : trimmedActiveUID
+            self.microphoneAutoSwitchEnabled = microphoneAutoSwitchEnabled
+            self.microphonePriorityUIDs = microphonePriorityUIDs
+            self.trackedMicrophoneRecords = trackedMicrophoneRecords
             self.modelStorageRootPath = modelStorageRootPath
             self.interactionSoundsEnabled = interactionSoundsEnabled
             self.interactionSoundPreset = interactionSoundPreset
@@ -204,7 +225,16 @@ enum ConfigurationTransferManager {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             interfaceLanguage = try container.decode(String.self, forKey: .interfaceLanguage)
-            selectedInputDeviceID = try container.decode(Int.self, forKey: .selectedInputDeviceID)
+            selectedInputDeviceID = try container.decodeIfPresent(Int.self, forKey: .selectedInputDeviceID) ?? 0
+            let decodedActiveUID = try container.decodeIfPresent(String.self, forKey: .activeInputDeviceUID)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            let decodedManualUID = try legacyContainer.decodeIfPresent(String.self, forKey: .manualSelectedInputDeviceUID)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            activeInputDeviceUID = !decodedActiveUID.isEmpty ? decodedActiveUID : (decodedManualUID.isEmpty ? nil : decodedManualUID)
+            microphoneAutoSwitchEnabled = try container.decodeIfPresent(Bool.self, forKey: .microphoneAutoSwitchEnabled) ?? true
+            microphonePriorityUIDs = try container.decodeIfPresent([String].self, forKey: .microphonePriorityUIDs) ?? []
+            trackedMicrophoneRecords = try container.decodeIfPresent([TrackedMicrophoneRecord].self, forKey: .trackedMicrophoneRecords) ?? []
             modelStorageRootPath = try container.decodeIfPresent(String.self, forKey: .modelStorageRootPath) ?? ""
             interactionSoundsEnabled = try container.decode(Bool.self, forKey: .interactionSoundsEnabled)
             interactionSoundPreset = try container.decode(String.self, forKey: .interactionSoundPreset)
@@ -242,6 +272,50 @@ enum ConfigurationTransferManager {
             customProxyPort = try container.decode(String.self, forKey: .customProxyPort)
             customProxyUsername = try container.decode(String.self, forKey: .customProxyUsername)
             customProxyPassword = try container.decode(String.self, forKey: .customProxyPassword)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(interfaceLanguage, forKey: .interfaceLanguage)
+            try container.encode(selectedInputDeviceID, forKey: .selectedInputDeviceID)
+            try container.encodeIfPresent(activeInputDeviceUID, forKey: .activeInputDeviceUID)
+            try container.encode(microphoneAutoSwitchEnabled, forKey: .microphoneAutoSwitchEnabled)
+            try container.encode(microphonePriorityUIDs, forKey: .microphonePriorityUIDs)
+            try container.encode(trackedMicrophoneRecords, forKey: .trackedMicrophoneRecords)
+            try container.encode(modelStorageRootPath, forKey: .modelStorageRootPath)
+            try container.encode(interactionSoundsEnabled, forKey: .interactionSoundsEnabled)
+            try container.encode(interactionSoundPreset, forKey: .interactionSoundPreset)
+            try container.encode(muteSystemAudioWhileRecording, forKey: .muteSystemAudioWhileRecording)
+            try container.encode(overlayPosition, forKey: .overlayPosition)
+            try container.encode(overlayCardOpacity, forKey: .overlayCardOpacity)
+            try container.encode(overlayCardCornerRadius, forKey: .overlayCardCornerRadius)
+            try container.encode(overlayScreenEdgeInset, forKey: .overlayScreenEdgeInset)
+            try container.encode(translationTargetLanguage, forKey: .translationTargetLanguage)
+            try container.encode(userMainLanguageCodes, forKey: .userMainLanguageCodes)
+            try container.encode(translateSelectedTextOnTranslationHotkey, forKey: .translateSelectedTextOnTranslationHotkey)
+            try container.encode(meetingNotesBetaEnabled, forKey: .meetingNotesBetaEnabled)
+            try container.encode(meetingOverlayCollapsed, forKey: .meetingOverlayCollapsed)
+            try container.encode(meetingRealtimeTranslateEnabled, forKey: .meetingRealtimeTranslateEnabled)
+            try container.encode(meetingRealtimeTranslationTargetLanguage, forKey: .meetingRealtimeTranslationTargetLanguage)
+            try container.encode(voiceEndCommandEnabled, forKey: .voiceEndCommandEnabled)
+            try container.encode(voiceEndCommandPreset, forKey: .voiceEndCommandPreset)
+            try container.encode(voiceEndCommandText, forKey: .voiceEndCommandText)
+            try container.encode(autoCopyWhenNoFocusedInput, forKey: .autoCopyWhenNoFocusedInput)
+            try container.encode(alwaysShowRewriteAnswerCard, forKey: .alwaysShowRewriteAnswerCard)
+            try container.encode(launchAtLogin, forKey: .launchAtLogin)
+            try container.encode(showInDock, forKey: .showInDock)
+            try container.encode(historyEnabled, forKey: .historyEnabled)
+            try container.encode(historyRetentionPeriod, forKey: .historyRetentionPeriod)
+            try container.encode(autoCheckForUpdates, forKey: .autoCheckForUpdates)
+            try container.encode(hotkeyDebugLoggingEnabled, forKey: .hotkeyDebugLoggingEnabled)
+            try container.encode(llmDebugLoggingEnabled, forKey: .llmDebugLoggingEnabled)
+            try container.encode(useSystemProxy, forKey: .useSystemProxy)
+            try container.encode(networkProxyMode, forKey: .networkProxyMode)
+            try container.encode(customProxyScheme, forKey: .customProxyScheme)
+            try container.encode(customProxyHost, forKey: .customProxyHost)
+            try container.encode(customProxyPort, forKey: .customProxyPort)
+            try container.encode(customProxyUsername, forKey: .customProxyUsername)
+            try container.encode(customProxyPassword, forKey: .customProxyPassword)
         }
     }
 
@@ -816,6 +890,10 @@ enum ConfigurationTransferManager {
         let general = GeneralSettings(
             interfaceLanguage: defaults.string(forKey: AppPreferenceKey.interfaceLanguage) ?? AppInterfaceLanguage.system.rawValue,
             selectedInputDeviceID: defaults.integer(forKey: AppPreferenceKey.selectedInputDeviceID),
+            activeInputDeviceUID: MicrophonePreferenceManager.activeInputDeviceUID(defaults: defaults),
+            microphoneAutoSwitchEnabled: MicrophonePreferenceManager.autoSwitchEnabled(defaults: defaults),
+            microphonePriorityUIDs: MicrophonePreferenceManager.priorityUIDs(defaults: defaults),
+            trackedMicrophoneRecords: MicrophonePreferenceManager.trackedRecords(defaults: defaults),
             modelStorageRootPath: defaults.string(forKey: AppPreferenceKey.modelStorageRootPath) ?? "",
             interactionSoundsEnabled: defaults.bool(forKey: AppPreferenceKey.interactionSoundsEnabled),
             interactionSoundPreset: defaults.string(forKey: AppPreferenceKey.interactionSoundPreset) ?? "",
@@ -855,7 +933,7 @@ enum ConfigurationTransferManager {
         )
 
         return ExportPayload(
-            version: 15,
+            version: 17,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
             model: .init(
@@ -936,6 +1014,15 @@ enum ConfigurationTransferManager {
 
         defaults.set(general.interfaceLanguage, forKey: AppPreferenceKey.interfaceLanguage)
         defaults.set(general.selectedInputDeviceID, forKey: AppPreferenceKey.selectedInputDeviceID)
+        if let activeInputDeviceUID = general.activeInputDeviceUID {
+            defaults.set(activeInputDeviceUID, forKey: AppPreferenceKey.activeInputDeviceUID)
+        } else {
+            defaults.removeObject(forKey: AppPreferenceKey.activeInputDeviceUID)
+        }
+        defaults.removeObject(forKey: "manualSelectedInputDeviceUID")
+        defaults.set(general.microphoneAutoSwitchEnabled, forKey: AppPreferenceKey.microphoneAutoSwitchEnabled)
+        defaults.set(general.microphonePriorityUIDs, forKey: AppPreferenceKey.microphonePriorityUIDs)
+        persistTrackedMicrophoneRecords(general.trackedMicrophoneRecords, defaults: defaults)
         defaults.set(general.modelStorageRootPath, forKey: AppPreferenceKey.modelStorageRootPath)
         defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
         defaults.set(general.interactionSoundsEnabled, forKey: AppPreferenceKey.interactionSoundsEnabled)
@@ -1091,6 +1178,20 @@ enum ConfigurationTransferManager {
             )
         })
         return RemoteModelConfigurationStore.saveConfigurations(mapped)
+    }
+
+    private static func persistTrackedMicrophoneRecords(
+        _ records: [TrackedMicrophoneRecord],
+        defaults: UserDefaults
+    ) {
+        guard let data = try? JSONEncoder().encode(records),
+              let raw = String(data: data, encoding: .utf8)
+        else {
+            defaults.removeObject(forKey: AppPreferenceKey.trackedMicrophoneRecords)
+            return
+        }
+
+        defaults.set(raw, forKey: AppPreferenceKey.trackedMicrophoneRecords)
     }
 
     private static func loadAppBranchGroups(defaults: UserDefaults) -> [ExportedAppBranchGroup] {

@@ -7,9 +7,19 @@ extension AppDelegate {
         .standard
     }
 
+    var selectedInputDeviceUID: String? {
+        MicrophonePreferenceManager.activeInputDeviceUID(defaults: defaults)
+    }
+
     var selectedInputDeviceID: AudioDeviceID? {
-        let raw = defaults.integer(forKey: AppPreferenceKey.selectedInputDeviceID)
-        return raw > 0 ? AudioDeviceID(raw) : nil
+        MicrophonePreferenceManager.activeInputDeviceID(
+            defaults: defaults,
+            availableDevices: inputDevicesSnapshot
+        )
+    }
+
+    var microphoneAutoSwitchEnabled: Bool {
+        MicrophonePreferenceManager.autoSwitchEnabled(defaults: defaults)
     }
 
     var interactionSoundsEnabled: Bool {

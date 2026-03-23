@@ -655,10 +655,81 @@ extension AppDelegate {
         return nil
     }
 
-    private func applyPreferredInputDevice() {
+    func applyPreferredInputDevice() {
         speechTranscriber.setPreferredInputDevice(selectedInputDeviceID)
         mlxTranscriber?.setPreferredInputDevice(selectedInputDeviceID)
         whisperTranscriber?.setPreferredInputDevice(selectedInputDeviceID)
+        remoteASRTranscriber.setPreferredInputDevice(selectedInputDeviceID)
+    }
+
+    func handlePreferredInputDeviceChange(
+        previousUID: String?,
+        newUID: String?,
+        reason: String
+    ) {
+        applyPreferredInputDevice()
+
+        guard previousUID != newUID else { return }
+
+        guard let currentDevice = microphoneResolvedState.activeDevice else {
+            if meetingSessionCoordinator.isActive {
+                showOverlayReminder(String(localized: "No available microphone devices."))
+                meetingSessionCoordinator.stop()
+                return
+            }
+
+            if isSessionActive {
+                showOverlayReminder(String(localized: "No available microphone devices."))
+                finishSession(after: 0)
+            }
+            return
+        }
+
+        if meetingSessionCoordinator.isActive {
+            do {
+                try meetingSessionCoordinator.switchMicrophoneInput(to: currentDevice.id)
+            } catch {
+                VoxtLog.error("Meeting microphone switch failed: \(error.localizedDescription). reason=\(reason)")
+                showOverlayReminder(AppLocalization.format("Failed to switch microphone to %@.", currentDevice.name))
+                meetingSessionCoordinator.stop()
+            }
+            return
+        }
+
+        guard isSessionActive else { return }
+
+        do {
+            try restartCurrentRecordingCaptureForPreferredInputDevice()
+            showOverlayStatus(
+                AppLocalization.format("Switched microphone to %@.", currentDevice.name),
+                clearAfter: 1.8
+            )
+        } catch {
+            VoxtLog.error("Recording microphone switch failed: \(error.localizedDescription). reason=\(reason)")
+            showOverlayReminder(
+                AppLocalization.format("Failed to switch microphone to %@.", currentDevice.name)
+            )
+            finishSession(after: 0)
+        }
+    }
+
+    private func restartCurrentRecordingCaptureForPreferredInputDevice() throws {
+        if transcriptionEngine == .mlxAudio {
+            try mlxTranscriber?.restartCaptureForPreferredInputDevice()
+            return
+        }
+
+        if transcriptionEngine == .whisperKit {
+            try whisperTranscriber?.restartCaptureForPreferredInputDevice()
+            return
+        }
+
+        if transcriptionEngine == .remote {
+            try remoteASRTranscriber.restartCaptureForPreferredInputDevice()
+            return
+        }
+
+        try speechTranscriber.restartCaptureForPreferredInputDevice()
     }
 
     private func startSilenceMonitoringIfNeeded() {

@@ -3,7 +3,10 @@ import CoreAudio
 
 struct AudioInputDevice: Identifiable, Hashable, Sendable {
     let id: AudioDeviceID
+    let uid: String
     let name: String
+
+    var identifier: String { uid }
 }
 
 enum AudioInputDeviceManager {
@@ -44,8 +47,9 @@ enum AudioInputDeviceManager {
 
         let devices: [AudioInputDevice] = deviceIDs.compactMap { (id: AudioDeviceID) -> AudioInputDevice? in
             guard hasInputStream(deviceID: id) else { return nil }
+            guard let uid = deviceUID(deviceID: id), !uid.isEmpty else { return nil }
             guard let name = deviceName(deviceID: id), !name.isEmpty else { return nil }
-            return AudioInputDevice(id: id, name: name)
+            return AudioInputDevice(id: id, uid: uid, name: name)
         }
         .sorted { (lhs: AudioInputDevice, rhs: AudioInputDevice) in
             lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
@@ -75,6 +79,14 @@ enum AudioInputDeviceManager {
             return nil
         }
         return deviceID
+    }
+
+    static func defaultInputDeviceUID(from devices: [AudioInputDevice]? = nil) -> String? {
+        guard let defaultID = defaultInputDeviceID() else { return nil }
+        if let devices, let device = devices.first(where: { $0.id == defaultID }) {
+            return device.uid
+        }
+        return deviceUID(deviceID: defaultID)
     }
 
     static func resolvedInputDeviceID(
@@ -138,6 +150,27 @@ enum AudioInputDeviceManager {
         let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, &buffer)
         guard status == noErr else { return nil }
         return String(cString: buffer)
+    }
+
+    nonisolated private static func deviceUID(deviceID: AudioDeviceID) -> String? {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var unmanagedUID: CFString?
+        var dataSize = UInt32(MemoryLayout<CFString?>.size)
+        let status = AudioObjectGetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &unmanagedUID
+        )
+        guard status == noErr, let unmanagedUID else { return nil }
+        return unmanagedUID as String
     }
 }
 

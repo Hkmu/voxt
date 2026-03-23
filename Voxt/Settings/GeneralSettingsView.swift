@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 struct GeneralSettingsView: View {
     let appUpdateManager: AppUpdateManager
     let navigationRequest: SettingsNavigationRequest?
-    @AppStorage(AppPreferenceKey.selectedInputDeviceID) private var selectedInputDeviceIDRaw = 0
     @AppStorage(AppPreferenceKey.interactionSoundsEnabled) private var interactionSoundsEnabled = true
     @AppStorage(AppPreferenceKey.interactionSoundPreset) private var interactionSoundPresetRaw = InteractionSoundPreset.soft.rawValue
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
@@ -35,6 +34,7 @@ struct GeneralSettingsView: View {
     @AppStorage(AppPreferenceKey.modelStorageRootPath) private var modelStorageRootPath = ""
 
     @State private var inputDevices: [AudioInputDevice] = []
+    @State private var microphoneState = MicrophoneResolvedState.empty
     @State private var launchAtLoginError: String?
     @State private var isSyncingLaunchAtLoginState = false
     @State private var interactionSoundPlayer = InteractionSoundPlayer()
@@ -42,11 +42,8 @@ struct GeneralSettingsView: View {
     @State private var modelStorageSelectionError: String?
     @State private var configurationTransferMessage: String?
     @State private var isUserMainLanguageSheetPresented = false
+    @State private var isMicrophonePriorityDialogPresented = false
     @State private var systemAudioPermissionMessage: String?
-
-    private var selectedInputDeviceID: AudioDeviceID {
-        AudioDeviceID(selectedInputDeviceIDRaw)
-    }
 
     private var networkProxyMode: Binding<VoxtNetworkSession.ProxyMode> {
         Binding(
@@ -120,13 +117,14 @@ struct GeneralSettingsView: View {
             .settingsNavigationAnchor(.generalConfiguration)
 
             GeneralAudioCard(
-                inputDevices: inputDevices,
-                selectedInputDeviceIDRaw: $selectedInputDeviceIDRaw,
+                microphoneState: microphoneState,
                 interactionSoundsEnabled: $interactionSoundsEnabled,
                 muteSystemAudioWhileRecording: $muteSystemAudioWhileRecording,
                 systemAudioPermissionMessage: systemAudioPermissionMessage,
                 interactionSoundPreset: interactionSoundPresetSelection,
-                onTrySound: { interactionSoundPlayer.playPreview(preset: interactionSoundPreset) }
+                onTrySound: { interactionSoundPlayer.playPreview(preset: interactionSoundPreset) },
+                onManageMicrophones: { isMicrophonePriorityDialogPresented = true },
+                onViewPriorityList: { isMicrophonePriorityDialogPresented = true }
             )
             .settingsNavigationAnchor(.generalAudio)
 
@@ -188,10 +186,6 @@ struct GeneralSettingsView: View {
         }
         .onAppear {
             refreshInputDevices()
-            if selectedInputDeviceIDRaw == 0,
-               let defaultDeviceID = AudioInputDeviceManager.defaultInputDeviceID() {
-                selectedInputDeviceIDRaw = Int(defaultDeviceID)
-            }
 
             Task {
                 let status = AppBehaviorController.launchAtLoginIsEnabled()
@@ -266,13 +260,13 @@ struct GeneralSettingsView: View {
             overlayScreenEdgeInset = min(max(newValue, 0), 120)
             postOverlayAppearanceDidChange()
         }
-        .onChange(of: selectedInputDeviceIDRaw) { _, _ in
-            NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
-        }
         .onChange(of: modelStorageRootPath) { _, _ in
             refreshModelStorageDisplayPath()
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtAudioInputDevicesDidChange)) { _ in
+            refreshInputDevices()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtSelectedInputDeviceDidChange)) { _ in
             refreshInputDevices()
         }
         .sheet(isPresented: $isUserMainLanguageSheetPresented) {
@@ -283,24 +277,29 @@ struct GeneralSettingsView: View {
                 userMainLanguageCodesRaw = UserMainLanguageOption.storageValue(for: updatedCodes)
             }
         }
+        .sheet(isPresented: $isMicrophonePriorityDialogPresented) {
+            MicrophonePriorityDialog(
+                state: microphoneState,
+                onUseNow: { uid in
+                    focusMicrophone(uid: uid, source: "settings dialog")
+                },
+                onAutoSwitchChanged: { isEnabled in
+                    setMicrophoneAutoSwitchEnabled(isEnabled)
+                },
+                onReorderPriority: { orderedUIDs in
+                    applyMicrophonePriorityOrder(orderedUIDs)
+                }
+            )
+        }
         .id(interfaceLanguageRaw)
     }
 
     private func refreshInputDevices() {
         inputDevices = AudioInputDeviceManager.availableInputDevices()
-        if inputDevices.isEmpty {
-            selectedInputDeviceIDRaw = 0
-            return
-        }
-
-        let selectedExists = inputDevices.contains(where: { Int($0.id) == selectedInputDeviceIDRaw })
-        if !selectedExists,
-           let defaultDeviceID = AudioInputDeviceManager.defaultInputDeviceID(),
-           inputDevices.contains(where: { $0.id == defaultDeviceID }) {
-            selectedInputDeviceIDRaw = Int(defaultDeviceID)
-        } else if !selectedExists, let first = inputDevices.first {
-            selectedInputDeviceIDRaw = Int(first.id)
-        }
+        microphoneState = MicrophonePreferenceManager.syncState(
+            defaults: .standard,
+            availableDevices: inputDevices
+        )
     }
 
     private var interactionSoundPreset: InteractionSoundPreset {
@@ -384,5 +383,43 @@ struct GeneralSettingsView: View {
 
     private func postOverlayAppearanceDidChange() {
         NotificationCenter.default.post(name: .voxtOverlayAppearanceDidChange, object: nil)
+    }
+
+    private func selectMicrophoneManually(uid: String) {
+        microphoneState = MicrophonePreferenceManager.setFocusedDevice(
+            uid: uid,
+            defaults: .standard,
+            availableDevices: inputDevices
+        )
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+    }
+
+    private func setMicrophoneAutoSwitchEnabled(_ isEnabled: Bool) {
+        VoxtLog.info("Microphone auto switch updated from settings dialog. enabled=\(isEnabled)")
+        microphoneState = MicrophonePreferenceManager.setAutoSwitchEnabled(
+            isEnabled,
+            defaults: .standard,
+            availableDevices: inputDevices
+        )
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+    }
+
+    private func applyMicrophonePriorityOrder(_ orderedUIDs: [String]) {
+        VoxtLog.info("Microphone priority updated from settings dialog. orderedUIDs=\(orderedUIDs.joined(separator: ","))", verbose: true)
+        microphoneState = MicrophonePreferenceManager.reorderPriority(
+            orderedUIDs: orderedUIDs,
+            defaults: .standard,
+            availableDevices: inputDevices
+        )
+        NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
+    }
+
+    private func focusMicrophone(uid: String, source: String) {
+        if let entry = microphoneState.entries.first(where: { $0.uid == uid }) {
+            VoxtLog.info("Microphone focus changed from \(source). uid=\(uid), name=\(entry.name)")
+        } else {
+            VoxtLog.info("Microphone focus changed from \(source). uid=\(uid)")
+        }
+        selectMicrophoneManually(uid: uid)
     }
 }
