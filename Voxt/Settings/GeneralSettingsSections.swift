@@ -10,9 +10,12 @@ struct GeneralConfigurationCard: View {
         GeneralSettingsCard(title: "Configuration") {
             HStack(spacing: 8) {
                 Button("Export Configuration", action: onExport)
+                    .buttonStyle(SettingsPillButtonStyle())
                 Button("Import Configuration", action: onImport)
+                    .buttonStyle(SettingsPillButtonStyle())
                 if let onOpenSetupGuide {
                     Button("Open Setup Guide", action: onOpenSetupGuide)
+                        .buttonStyle(SettingsPillButtonStyle())
                 }
             }
 
@@ -41,28 +44,17 @@ struct GeneralAudioCard: View {
 
     var body: some View {
         GeneralSettingsCard(title: "Audio") {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Text("Microphone")
                     .foregroundStyle(.secondary)
                 Spacer()
                 if microphoneState.hasAvailableDevices {
-                    Button(action: onManageMicrophones) {
-                        HStack(spacing: 8) {
+                    SettingsSelectionButton(width: 272, action: onManageMicrophones) {
+                        HStack(spacing: 0) {
                             Text(microphoneState.activeDevice?.name ?? String(localized: "No available microphone devices"))
                                 .lineLimit(1)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color(nsColor: .controlBackgroundColor))
-                        )
                     }
-                    .buttonStyle(.plain)
-                    .frame(width: 320, alignment: .trailing)
                 } else {
                     Text(String(localized: "No available microphone devices"))
                         .font(.caption.weight(.semibold))
@@ -84,7 +76,7 @@ struct GeneralAudioCard: View {
                 HStack {
                     Spacer()
                     Button("View Priority List", action: onViewPriorityList)
-                        .buttonStyle(.link)
+                        .buttonStyle(SettingsPillButtonStyle())
                 }
             }
 
@@ -104,22 +96,21 @@ struct GeneralAudioCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Text("Sound Preset")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Picker("Sound Preset", selection: $interactionSoundPreset) {
-                    ForEach(InteractionSoundPreset.allCases, id: \.rawValue) { preset in
-                        Text(preset.titleKey).tag(preset)
-                    }
-                }
-                .pickerStyle(.menu)
-                .controlSize(.regular)
-                .labelsHidden()
-                .frame(width: 220, alignment: .trailing)
+                SettingsMenuPicker(
+                    selection: $interactionSoundPreset,
+                    options: InteractionSoundPreset.allCases.map { preset in
+                        SettingsMenuOption(value: preset, title: preset.title)
+                    },
+                    selectedTitle: interactionSoundPreset.title,
+                    width: 220
+                )
 
                 Button("Try Sound", action: onTrySound)
-                    .controlSize(.regular)
+                    .buttonStyle(SettingsPillButtonStyle())
             }
         }
     }
@@ -130,21 +121,23 @@ struct GeneralTranscriptionUICard: View {
     @Binding var overlayCardOpacity: Int
     @Binding var overlayCardCornerRadius: Int
     @Binding var overlayScreenEdgeInset: Int
+    @Binding var meetingNotesBetaEnabled: Bool
+    @Binding var hideMeetingOverlayFromScreenSharing: Bool
 
     var body: some View {
         GeneralSettingsCard(title: "Transcription UI") {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Text("Position")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Picker("Position", selection: $overlayPosition) {
-                    ForEach(OverlayPosition.allCases, id: \.rawValue) { position in
-                        Text(position.titleKey).tag(position)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 180, alignment: .trailing)
+                SettingsMenuPicker(
+                    selection: $overlayPosition,
+                    options: OverlayPosition.allCases.map { position in
+                        SettingsMenuOption(value: position, title: position.title)
+                    },
+                    selectedTitle: overlayPosition.title,
+                    width: 180
+                )
             }
 
             overlayNumberField(
@@ -170,6 +163,18 @@ struct GeneralTranscriptionUICard: View {
                 width: 90,
                 unit: "pt"
             )
+
+            if meetingNotesBetaEnabled {
+                Toggle(isOn: $hideMeetingOverlayFromScreenSharing) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Meeting Transcript UI Shareable")
+                        Text("Leave this off to keep the meeting transcript overlay private. Turn it on if you want the UI to appear in screen sharing or screen recordings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
         }
     }
 
@@ -180,7 +185,7 @@ struct GeneralTranscriptionUICard: View {
         width: CGFloat,
         unit: String
     ) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center) {
             Text(title)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -215,8 +220,8 @@ private struct ClampedIntegerTextField: View {
 
     var body: some View {
         TextField("", text: $text)
-            .textFieldStyle(.roundedBorder)
-            .frame(width: width)
+            .textFieldStyle(.plain)
+            .settingsFieldSurface(width: width, alignment: .trailing)
             .multilineTextAlignment(.trailing)
             .onChange(of: text) { _, newValue in
                 let digits = newValue.filter(\.isNumber)
@@ -269,14 +274,14 @@ struct GeneralLanguagesCard: View {
                 title: "Interface Language",
                 description: "Supports English, Chinese, and Japanese. Unsupported system languages default to English."
             ) {
-                Picker("Language", selection: $interfaceLanguage) {
-                    ForEach(AppInterfaceLanguage.allCases, id: \.rawValue) { language in
-                        Text(language.titleKey).tag(language)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 220, alignment: .trailing)
+                SettingsMenuPicker(
+                    selection: $interfaceLanguage,
+                    options: AppInterfaceLanguage.allCases.map { language in
+                        SettingsMenuOption(value: language, title: language.title)
+                    },
+                    selectedTitle: interfaceLanguage.title,
+                    width: 220
+                )
             }
 
             Divider()
@@ -285,17 +290,13 @@ struct GeneralLanguagesCard: View {
                 title: "User Main Language",
                 description: "Used for the {{USER_MAIN_LANGUAGE}} prompt variable in enhancement and translation. You can select multiple languages and mark one as primary."
             ) {
-                Button(action: onEditUserMainLanguage) {
-                    HStack(spacing: 8) {
+                SettingsSelectionButton(width: 220, action: onEditUserMainLanguage) {
+                    HStack(spacing: 0) {
                         Text(userMainLanguageSummary)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
-                .buttonStyle(.plain)
             }
 
             Divider()
@@ -304,14 +305,14 @@ struct GeneralLanguagesCard: View {
                 title: "Translation",
                 description: "Used by the dedicated translation shortcut (fn + Left Shift)."
             ) {
-                Picker("Target language", selection: $translationTargetLanguage) {
-                    ForEach(TranslationTargetLanguage.allCases, id: \.rawValue) { language in
-                        Text(language.titleKey).tag(language)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 220, alignment: .trailing)
+                SettingsMenuPicker(
+                    selection: $translationTargetLanguage,
+                    options: TranslationTargetLanguage.allCases.map { language in
+                        SettingsMenuOption(value: language, title: language.title)
+                    },
+                    selectedTitle: translationTargetLanguage.title,
+                    width: 220
+                )
             }
         }
     }
@@ -342,11 +343,11 @@ struct GeneralModelStorageCard: View {
                             .font(.caption)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsInlineSelectorButtonStyle())
                 .help("Open folder")
 
                 Button("Choose", action: onChoose)
-                    .controlSize(.small)
+                    .buttonStyle(SettingsPillButtonStyle())
             }
 
             Text("New model downloads in Model settings are stored in this folder.")
@@ -478,49 +479,53 @@ struct GeneralAppBehaviorCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
                 Text("Proxy")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Picker("Proxy", selection: $networkProxyMode) {
-                    Text("Follow System").tag(VoxtNetworkSession.ProxyMode.system)
-                    Text("Off").tag(VoxtNetworkSession.ProxyMode.disabled)
-                    Text("Custom").tag(VoxtNetworkSession.ProxyMode.custom)
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 220, alignment: .trailing)
+                SettingsMenuPicker(
+                    selection: $networkProxyMode,
+                    options: [
+                        SettingsMenuOption(value: .system, title: String(localized: "Follow System")),
+                        SettingsMenuOption(value: .disabled, title: String(localized: "Off")),
+                        SettingsMenuOption(value: .custom, title: String(localized: "Custom"))
+                    ],
+                    selectedTitle: networkProxyModeTitle,
+                    width: 220
+                )
             }
             Text("Follow the macOS proxy settings, disable proxy use entirely, or provide a custom proxy endpoint for Voxt network requests.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if networkProxyMode == .custom {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center) {
                     Text("Protocol")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Picker("Protocol", selection: $customProxyScheme) {
-                        Text("HTTP").tag(VoxtNetworkSession.ProxyScheme.http)
-                        Text("HTTPS").tag(VoxtNetworkSession.ProxyScheme.https)
-                        Text("SOCKS5").tag(VoxtNetworkSession.ProxyScheme.socks5)
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 160, alignment: .trailing)
+                    SettingsMenuPicker(
+                        selection: $customProxyScheme,
+                        options: [
+                            SettingsMenuOption(value: .http, title: "HTTP"),
+                            SettingsMenuOption(value: .https, title: "HTTPS"),
+                            SettingsMenuOption(value: .socks5, title: "SOCKS5")
+                        ],
+                        selectedTitle: customProxySchemeTitle,
+                        width: 160
+                    )
                 }
 
                 proxyField(title: "Host", placeholder: "127.0.0.1", text: $customProxyHost, width: 220)
                 proxyField(title: "Port", placeholder: "7890", text: $customProxyPort, width: 120)
                 proxyField(title: "Username", placeholder: "Optional", text: $customProxyUsername, width: 220)
 
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center) {
                     Text("Password")
                         .foregroundStyle(.secondary)
                     Spacer()
                     SecureField("Optional", text: $customProxyPassword)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
+                        .textFieldStyle(.plain)
+                        .settingsFieldSurface(width: 220)
                 }
 
                 Text("Custom proxy supports HTTP, HTTPS, and SOCKS5 host/port routing. Username and password are saved now, but not injected into requests automatically yet.")
@@ -537,13 +542,37 @@ struct GeneralAppBehaviorCard: View {
     }
 
     private func proxyField(title: LocalizedStringKey, placeholder: String, text: Binding<String>, width: CGFloat) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center) {
             Text(title)
                 .foregroundStyle(.secondary)
             Spacer()
             TextField(placeholder, text: text)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: width)
+                .textFieldStyle(.plain)
+                .settingsFieldSurface(width: width)
+        }
+    }
+}
+
+private extension GeneralAppBehaviorCard {
+    var networkProxyModeTitle: String {
+        switch networkProxyMode {
+        case .system:
+            return String(localized: "Follow System")
+        case .disabled:
+            return String(localized: "Off")
+        case .custom:
+            return String(localized: "Custom")
+        }
+    }
+
+    var customProxySchemeTitle: String {
+        switch customProxyScheme {
+        case .http:
+            return "HTTP"
+        case .https:
+            return "HTTPS"
+        case .socks5:
+            return "SOCKS5"
         }
     }
 }
@@ -564,15 +593,14 @@ struct GeneralSettingsCard<Content: View>: View {
     }
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: spacing) {
-                Text(title)
-                    .font(.headline)
-                content()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
+        VStack(alignment: .leading, spacing: spacing) {
+            Text(title)
+                .font(.headline)
+            content()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .settingsCardSurface()
     }
 }
 

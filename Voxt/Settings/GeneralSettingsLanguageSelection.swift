@@ -47,7 +47,8 @@ struct UserMainLanguageSelectionSheet: View {
                 .font(.title3.weight(.semibold))
 
             TextField("Search languages", text: $searchText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .settingsFieldSurface(minHeight: 34)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
@@ -71,15 +72,18 @@ struct UserMainLanguageSelectionSheet: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button("Cancel") {
                     dismiss()
                 }
+                .buttonStyle(SettingsPillButtonStyle())
+                .keyboardShortcut(.cancelAction)
+
                 Button("Save") {
                     onSave(draftCodes)
                     dismiss()
                 }
+                .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(draftCodes.isEmpty)
             }
@@ -147,11 +151,11 @@ private struct UserMainLanguageRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(SettingsUIStyle.controlFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
         )
     }
 }

@@ -199,6 +199,8 @@ struct HelpNavigationCommands: Commands {
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
+    static weak var shared: AppDelegate?
+
     struct StoredBranchURLItem: Codable {
         let id: UUID
         let pattern: String
@@ -385,9 +387,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.escapeKeyCancelsOverlaySession: true,
             AppPreferenceKey.translateSelectedTextOnTranslationHotkey: true,
             AppPreferenceKey.meetingNotesBetaEnabled: false,
+            AppPreferenceKey.hideMeetingOverlayFromScreenSharing: false,
             AppPreferenceKey.meetingOverlayCollapsed: false,
             AppPreferenceKey.meetingRealtimeTranslateEnabled: false,
             AppPreferenceKey.meetingRealtimeTranslationTargetLanguage: "",
+            AppPreferenceKey.meetingSummaryAutoGenerate: true,
+            AppPreferenceKey.meetingSummaryLength: "",
+            AppPreferenceKey.meetingSummaryStyle: "",
+            AppPreferenceKey.meetingSummaryPromptTemplate: AppPreferenceKey.defaultMeetingSummaryPrompt,
+            AppPreferenceKey.meetingSummaryModelSelection: "",
             AppPreferenceKey.voiceEndCommandEnabled: false,
             AppPreferenceKey.voiceEndCommandPreset: VoiceEndCommandPreset.over.rawValue,
             AppPreferenceKey.voiceEndCommandText: "",
@@ -432,6 +440,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         HotkeyPreference.migrateDefaultsIfNeeded()
         Self.migrateLegacyNetworkProxyPreferenceIfNeeded()
         super.init()
+        AppDelegate.shared = self
     }
 
     var transcriptionEngine: TranscriptionEngine {

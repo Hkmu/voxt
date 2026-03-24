@@ -432,16 +432,9 @@ struct OnboardingSettingsView: View {
 
                             OnboardingStatusBadge(status: stepStatus(for: step), isSelected: step == currentStep)
                         }
-                        .foregroundStyle(step == currentStep ? .white : .primary)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(step == currentStep ? Color.accentColor : Color.clear)
-                        )
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsSidebarItemButtonStyle(isActive: step == currentStep))
                 }
             }
 
@@ -459,18 +452,8 @@ struct OnboardingSettingsView: View {
                                 .foregroundStyle(.red)
                             Spacer(minLength: 0)
                         }
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.red.opacity(0.10))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsStatusButtonStyle(tint: .red))
                 }
 
                 HStack(spacing: 8) {
@@ -478,10 +461,14 @@ struct OnboardingSettingsView: View {
                         Button {
                             currentStep = previousStep
                         } label: {
-                            Label("Previous", systemImage: "chevron.left")
-                                .frame(maxWidth: .infinity)
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text("Previous")
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 9))
                         .frame(maxWidth: .infinity)
                     }
 
@@ -489,28 +476,33 @@ struct OnboardingSettingsView: View {
                         Button {
                             currentStep = nextStep
                         } label: {
-                            Label("Next", systemImage: "chevron.right")
-                                .frame(maxWidth: .infinity)
+                            HStack(spacing: 4) {
+                                Text("Next")
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(SettingsPrimaryButtonStyle(horizontalPadding: 10))
                         .frame(maxWidth: .infinity)
                     }
                 }
 
-                Button {
+                Group {
                     if currentStep == .finish {
-                        onFinish()
+                        Button(action: onFinish) {
+                            Label("Start Voxt", systemImage: "checkmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(SettingsPrimaryButtonStyle())
                     } else {
-                        onExit()
+                        Button(action: onExit) {
+                            Label("Exit Guide", systemImage: "xmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(SettingsPillButtonStyle())
                     }
-                } label: {
-                    Label(
-                        currentStep == .finish ? "Start Voxt" : "Exit Guide",
-                        systemImage: currentStep == .finish ? "checkmark.circle" : "xmark.circle"
-                    )
-                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
             }
             .padding(.top, 4)
@@ -519,15 +511,7 @@ struct OnboardingSettingsView: View {
         .padding(.bottom, 12)
         .padding(.top, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.72))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 3)
+        .settingsSidebarSurface()
     }
 
     var onboardingHeader: some View {

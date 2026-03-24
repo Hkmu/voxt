@@ -18,12 +18,11 @@ struct DictionaryAdvancedSettingsDialog: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack {
-                Spacer()
-
+            SettingsDialogActionRow {
                 Button("Done") {
                     isPresented = false
                 }
+                .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }
@@ -41,6 +40,16 @@ struct DictionarySuggestionIngestDialog: View {
     @Binding var draftPrompt: String
     @Binding var isPresented: Bool
     let onIngest: () -> Void
+
+    private var modelOptions: [SettingsMenuOption<String>] {
+        (localModelOptions + remoteModelOptions).map { option in
+            SettingsMenuOption(value: option.id, title: option.title)
+        }
+    }
+
+    private var selectedModelTitle: String {
+        selectedModelOption?.title ?? modelOptions.first?.title ?? String(localized: "Select Model")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -61,21 +70,12 @@ struct DictionarySuggestionIngestDialog: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
 
-                Picker(String(localized: "Model"), selection: $selectedModelID) {
-                    ForEach(localModelOptions) { option in
-                        Text(option.title).tag(option.id)
-                    }
-
-                    if !localModelOptions.isEmpty && !remoteModelOptions.isEmpty {
-                        Divider()
-                    }
-
-                    ForEach(remoteModelOptions) { option in
-                        Text(option.title).tag(option.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
+                SettingsMenuPicker(
+                    selection: $selectedModelID,
+                    options: modelOptions,
+                    selectedTitle: selectedModelTitle,
+                    width: 250
+                )
 
                 if let selectedModelOption, !selectedModelOption.detail.isEmpty {
                     Text(selectedModelOption.detail)
@@ -100,14 +100,15 @@ struct DictionarySuggestionIngestDialog: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack {
+            SettingsDialogActionRow {
                 Button("Cancel") {
                     isPresented = false
                 }
-
-                Spacer()
-
+                .buttonStyle(SettingsPillButtonStyle())
+                .keyboardShortcut(.cancelAction)
+            } trailing: {
                 Button("Apply", action: onIngest)
+                    .buttonStyle(SettingsPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
                     .disabled(selectedModelID.isEmpty)
             }

@@ -155,7 +155,7 @@ struct DictionarySettingsView: View {
                     Button(dictionarySuggestionStore.historyScanProgress.isRunning ? String(localized: "Scanning...") : String(localized: "One-Click Ingest")) {
                         presentSuggestionIngestDialog()
                     }
-                    .controlSize(.small)
+                    .buttonStyle(SettingsPillButtonStyle())
                     .disabled(dictionarySuggestionStore.historyScanProgress.isRunning || pendingHistoryScanCount == 0)
 
                     Divider()
@@ -164,12 +164,12 @@ struct DictionarySettingsView: View {
                     Button("Import") {
                         importDictionary()
                     }
-                    .controlSize(.small)
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button("Export") {
                         exportDictionary()
                     }
-                    .controlSize(.small)
+                    .buttonStyle(SettingsPillButtonStyle())
                 }
 
                 Text("When enabled, new history records are scanned automatically and the extracted terms are written directly into the dictionary.")
@@ -233,10 +233,12 @@ struct DictionarySettingsView: View {
                         errorMessage = nil
                         dialog = .create
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button("Clean All", role: .destructive) {
                         dictionaryStore.clearAll()
                     }
+                    .buttonStyle(SettingsStatusButtonStyle(tint: .red))
                     .disabled(dictionaryStore.entries.isEmpty)
                 }
 
@@ -289,18 +291,15 @@ struct DictionarySettingsView: View {
                 .font(.title3.weight(.semibold))
 
             TextField(String(localized: "Dictionary Term"), text: $draftTerm)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .settingsFieldSurface()
 
-            Picker("Group", selection: $selectedGroupID) {
-                Text("Global").tag(Optional<UUID>.none)
-                if let selectedGroupID, groupName(for: selectedGroupID) == nil {
-                    Text("Missing Group").tag(Optional(selectedGroupID))
-                }
-                ForEach(availableGroups) { group in
-                    Text(group.name).tag(Optional(group.id))
-                }
-            }
-            .pickerStyle(.menu)
+            SettingsMenuPicker(
+                selection: $selectedGroupID,
+                options: dictionaryGroupOptions,
+                selectedTitle: selectedDictionaryGroupTitle,
+                width: 240
+            )
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -314,12 +313,14 @@ struct DictionarySettingsView: View {
 
                 HStack(spacing: 8) {
                     TextField(String(localized: "Replacement Match Term"), text: $draftReplacementTermInput)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.plain)
+                        .settingsFieldSurface()
                         .onSubmit(addDraftReplacementTerm)
 
                     Button("Add") {
                         addDraftReplacementTerm()
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
                     .disabled(draftReplacementTermInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
@@ -344,19 +345,42 @@ struct DictionarySettingsView: View {
                     .foregroundStyle(.red)
             }
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button("Cancel") {
                     self.dialog = nil
                 }
+                .buttonStyle(SettingsPillButtonStyle())
+                .keyboardShortcut(.cancelAction)
+
                 Button(dialog.confirmButtonTitle) {
                     save(dialog: dialog)
                 }
+                .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
         .frame(width: 520)
+    }
+
+    private var dictionaryGroupOptions: [SettingsMenuOption<UUID?>] {
+        var options: [SettingsMenuOption<UUID?>] = [
+            SettingsMenuOption(value: nil, title: String(localized: "Global"))
+        ]
+        if let selectedGroupID, groupName(for: selectedGroupID) == nil {
+            options.append(SettingsMenuOption(value: selectedGroupID, title: String(localized: "Missing Group")))
+        }
+        options.append(contentsOf: availableGroups.map { group in
+            SettingsMenuOption(value: Optional(group.id), title: group.name)
+        })
+        return options
+    }
+
+    private var selectedDictionaryGroupTitle: String {
+        if let selectedGroupID {
+            return groupName(for: selectedGroupID) ?? String(localized: "Missing Group")
+        }
+        return String(localized: "Global")
     }
 
     private func save(dialog: DictionaryDialog) {

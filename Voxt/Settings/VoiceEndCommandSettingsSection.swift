@@ -36,14 +36,14 @@ struct VoiceEndCommandSettingsSection: View {
                     Text("Preset")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Picker("Preset", selection: voiceEndCommandPreset) {
-                        ForEach(VoiceEndCommandPreset.allCases) { preset in
-                            Text(preset.title).tag(preset)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 220, alignment: .trailing)
+                    SettingsMenuPicker(
+                        selection: voiceEndCommandPreset,
+                        options: VoiceEndCommandPreset.allCases.map { preset in
+                            SettingsMenuOption(value: preset, title: preset.title)
+                        },
+                        selectedTitle: voiceEndCommandPreset.wrappedValue.title,
+                        width: 220
+                    )
                 }
                 .disabled(!voiceEndCommandEnabled)
 
@@ -52,8 +52,8 @@ struct VoiceEndCommandSettingsSection: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     TextField("over", text: voiceEndCommandTextBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
+                        .textFieldStyle(.plain)
+                        .settingsFieldSurface(width: 220)
                 }
                 .disabled(!voiceEndCommandEnabled || voiceEndCommandPreset.wrappedValue != .custom)
 

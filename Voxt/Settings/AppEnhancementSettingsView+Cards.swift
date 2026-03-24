@@ -21,6 +21,7 @@ extension AppEnhancementSettingsView {
                             modalErrorMessage = nil
                             modal = .addURLs
                         }
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 28))
                     }
                 }
 
@@ -106,6 +107,7 @@ extension AppEnhancementSettingsView {
                         modalErrorMessage = nil
                         modal = .createGroup
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
                 }
 
                 if groups.isEmpty {
@@ -157,7 +159,7 @@ extension AppEnhancementSettingsView {
         .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(SettingsUIStyle.controlFillColor)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -167,7 +169,7 @@ extension AppEnhancementSettingsView {
                         : (
                             isOffline
                                 ? Color.primary.opacity(0.18)
-                                : (isAssigned ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.10))
+                                : (isAssigned ? Color.accentColor.opacity(0.55) : SettingsUIStyle.subtleBorderColor)
                         ),
                     lineWidth: isDragging ? 1.5 : 1
                 )
@@ -241,7 +243,7 @@ extension AppEnhancementSettingsView {
         .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(SettingsUIStyle.controlFillColor)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -302,12 +304,12 @@ extension AppEnhancementSettingsView {
                     modalErrorMessage = nil
                     modal = .editGroup(group.id)
                 }
-                .controlSize(.small)
+                .buttonStyle(SettingsCompactActionButtonStyle())
 
                 Button(AppLocalization.localizedString("Delete")) {
                     deleteGroup(groupID: group.id)
                 }
-                .controlSize(.small)
+                .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive))
             }
 
             if group.isExpanded {
@@ -348,8 +350,12 @@ extension AppEnhancementSettingsView {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.66))
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+        }
         .onDrop(of: [UTType.text.identifier], isTargeted: nil) { providers in
             handleDrop(providers: providers, groupID: group.id)
         }
@@ -382,7 +388,7 @@ extension AppEnhancementSettingsView {
                     saveGroup(state: currentModal)
                 }
             )
-            .frame(width: 460, height: 410)
+            .frame(width: 460, height: 482)
 
         case .addURLs:
             URLBatchEditorSheet(

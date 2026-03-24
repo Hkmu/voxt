@@ -58,14 +58,7 @@ struct OnboardingSummaryCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
     }
 }
 
@@ -114,16 +107,18 @@ struct LocalModelPickerCard<PickerContent: View>: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.green)
                     Button(openLabel, action: onOpen)
-                        .controlSize(.small)
+                        .buttonStyle(SettingsPillButtonStyle())
                 } else {
                     Text("Not installed")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
                     Button(installLabel, action: onInstall)
-                        .controlSize(.small)
+                        .buttonStyle(SettingsPillButtonStyle())
                 }
             }
         }
+        .padding(12)
+        .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
     }
 }
 
@@ -139,7 +134,7 @@ struct ProviderStatusRow: View {
                     .font(.subheadline.weight(.medium))
                 Spacer()
                 Button("Configure", action: onConfigure)
-                    .controlSize(.small)
+                    .buttonStyle(SettingsPillButtonStyle())
             }
 
             Text(status)
@@ -148,9 +143,6 @@ struct ProviderStatusRow: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
+        .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
     }
 }

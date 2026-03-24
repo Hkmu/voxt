@@ -10,32 +10,14 @@ struct DictionaryFilterPicker: View {
                     selectedFilter = filter
                 } label: {
                     Text(LocalizedStringKey(filter.titleKey))
-                        .font(.system(size: 11.5, weight: .semibold))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 22)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(selectedFilter == filter ? Color.accentColor : Color.secondary)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(selectedFilter == filter ? Color.accentColor.opacity(0.14) : .clear)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(selectedFilter == filter ? Color.accentColor.opacity(0.45) : .clear, lineWidth: 1)
-                }
+                .buttonStyle(SettingsSegmentedButtonStyle(isSelected: selectedFilter == filter))
             }
         }
         .padding(2)
         .frame(width: 230)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
     }
 }
 
@@ -77,13 +59,13 @@ struct DictionaryRow: View {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsCompactIconButtonStyle())
                 .help("Edit")
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
                 .help("Delete")
             }
         )
@@ -144,13 +126,13 @@ struct DictionarySuggestionRow: View {
                 Button(action: onAdd) {
                     Image(systemName: "plus.circle")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsCompactIconButtonStyle())
                 .help("Add to Dictionary")
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark.circle")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsCompactIconButtonStyle())
                 .help("Ignore")
             }
         )
@@ -205,14 +187,7 @@ private struct DictionaryListRowContainer<Content: View, Actions: View>: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.75))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
+        .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
     }
 }
 

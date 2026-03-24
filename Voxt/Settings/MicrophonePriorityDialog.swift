@@ -60,11 +60,11 @@ struct MicrophonePriorityDialog: View {
                 .frame(minHeight: 220, maxHeight: 250)
             }
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button("Done") {
                     dismiss()
                 }
+                .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }

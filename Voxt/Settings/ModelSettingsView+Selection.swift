@@ -20,13 +20,13 @@ extension ModelSettingsView {
 
     var translationProviderOptions: [ModelSettingsProviderOption] {
         TranslationModelProvider.allCases.map {
-            ModelSettingsProviderOption(id: $0.rawValue, titleKey: $0.titleKey)
+            ModelSettingsProviderOption(id: $0.rawValue, title: $0.title)
         }
     }
 
     var rewriteProviderOptions: [ModelSettingsProviderOption] {
         RewriteModelProvider.allCases.map {
-            ModelSettingsProviderOption(id: $0.rawValue, titleKey: $0.titleKey)
+            ModelSettingsProviderOption(id: $0.rawValue, title: $0.title)
         }
     }
 

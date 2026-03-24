@@ -885,3 +885,5 @@
 "Latest" = "最新";
 "The transcript timeline for Me / Them will appear here once the meeting starts." = "会議が始まると、ここに Me / Them のタイムラインが表示されます。";
 "Automatic scrolling pauses when you scroll away from the bottom." = "下端から離れると自動スクロールは一時停止します。";
+"Meeting Transcript UI Shareable" = "会議文字起こし UI を共有可能にする";
+"Leave this off to keep the meeting transcript overlay private. Turn it on if you want the UI to appear in screen sharing or screen recordings." = "オフのままなら会議文字起こしオーバーレイは非公開になり、画面共有や画面録画に表示されません。共有したい場合のみオンにしてください。";

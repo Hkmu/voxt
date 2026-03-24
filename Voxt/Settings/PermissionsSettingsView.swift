@@ -157,11 +157,11 @@ struct PermissionsSettingsView: View {
                             Button("Add Browser") {
                                 chooseBrowserApplication()
                             }
-                            .controlSize(.small)
+                            .buttonStyle(SettingsPillButtonStyle())
                             Button("Open Settings") {
                                 openBrowserAutomationSettings()
                             }
-                            .controlSize(.small)
+                            .buttonStyle(SettingsPillButtonStyle())
                         }
 
                         Text("Grant browser automation permission so Voxt can read active-tab URLs for App Branch matching.")
@@ -228,12 +228,12 @@ struct PermissionsSettingsView: View {
             Button("Request") {
                 requestPermission(kind)
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsCompactActionButtonStyle())
 
             Button("Open Settings") {
                 openSettings(for: kind)
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsCompactActionButtonStyle())
         }
         .padding(.vertical, 2)
     }
@@ -267,18 +267,18 @@ struct PermissionsSettingsView: View {
             Button("Request") {
                 requestBrowserAutomationPermission(target)
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsCompactActionButtonStyle())
 
             Button("Test") {
                 testBrowserURLRead(target)
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsCompactActionButtonStyle())
 
             if target.isCustom {
                 Button("Delete", role: .destructive) {
                     removeCustomBrowser(target)
                 }
-                .controlSize(.small)
+                .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive))
             }
         }
         .padding(.vertical, 2)

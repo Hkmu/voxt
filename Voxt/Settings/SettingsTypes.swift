@@ -394,6 +394,12 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .about: return "info.circle"
         }
     }
+
+    static func visibleTabs(appEnhancementEnabled: Bool) -> [SettingsTab] {
+        allCases.filter { tab in
+            appEnhancementEnabled || tab != .appEnhancement
+        }
+    }
 }
 
 struct SettingsSectionHeader: View {

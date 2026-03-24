@@ -113,21 +113,21 @@ struct ModelSettingsView: View {
                         .font(.headline)
 
                     HStack(alignment: .center, spacing: 12) {
-                        Picker("Engine", selection: $engineRaw) {
-                            ForEach(TranscriptionEngine.allCases) { engine in
-                                Text(engine.titleKey).tag(engine.rawValue)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .frame(maxWidth: 240, alignment: .leading)
+                        SettingsMenuPicker(
+                            selection: $engineRaw,
+                            options: TranscriptionEngine.allCases.map { engine in
+                                SettingsMenuOption(value: engine.rawValue, title: engine.title)
+                            },
+                            selectedTitle: selectedEngine.title,
+                            width: 240
+                        )
 
                         Spacer(minLength: 0)
 
                         Button("Engine Hint Settings") {
                             isASRHintSettingsPresented = true
                         }
-                        .controlSize(.regular)
+                        .buttonStyle(SettingsPillButtonStyle(height: 34))
                         .disabled(selectedEngine == .dictation)
                     }
 
@@ -157,15 +157,14 @@ struct ModelSettingsView: View {
                     Text("Text Enhancement")
                         .font(.headline)
 
-                    Picker("Enhancement", selection: $enhancementModeRaw) {
-                        Text(EnhancementMode.off.titleKey).tag(EnhancementMode.off.rawValue)
-                        Text(EnhancementMode.appleIntelligence.titleKey).tag(EnhancementMode.appleIntelligence.rawValue)
-                        Text(EnhancementMode.customLLM.titleKey).tag(EnhancementMode.customLLM.rawValue)
-                        Text(EnhancementMode.remoteLLM.titleKey).tag(EnhancementMode.remoteLLM.rawValue)
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(maxWidth: 260, alignment: .leading)
+                    SettingsMenuPicker(
+                        selection: $enhancementModeRaw,
+                        options: EnhancementMode.allCases.map { mode in
+                            SettingsMenuOption(value: mode.rawValue, title: mode.title)
+                        },
+                        selectedTitle: selectedEnhancementMode.title,
+                        width: 260
+                    )
 
                     if selectedEnhancementMode == .appleIntelligence {
                         appleIntelligenceSection

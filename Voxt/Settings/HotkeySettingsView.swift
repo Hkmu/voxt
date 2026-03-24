@@ -228,14 +228,14 @@ struct HotkeySettingsView: View {
                         Text("Preset")
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Picker("Preset", selection: presetBinding) {
-                            ForEach(HotkeyPreference.Preset.allCases) { preset in
-                                Text(preset.title).tag(preset)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 220, alignment: .trailing)
+                        SettingsMenuPicker(
+                            selection: presetBinding,
+                            options: HotkeyPreference.Preset.allCases.map { preset in
+                                SettingsMenuOption(value: preset, title: preset.title)
+                            },
+                            selectedTitle: presetBinding.wrappedValue.title,
+                            width: 220
+                        )
                     }
 
                     HStack(alignment: .top, spacing: 12) {
@@ -429,14 +429,14 @@ struct HotkeySettingsView: View {
                         Text("Trigger")
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Picker("Trigger", selection: triggerModeBinding) {
-                            ForEach(HotkeyPreference.TriggerMode.allCases) { mode in
-                                Text(mode.titleKey).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 220, alignment: .trailing)
+                        SettingsMenuPicker(
+                            selection: triggerModeBinding,
+                            options: HotkeyPreference.TriggerMode.allCases.map { mode in
+                                SettingsMenuOption(value: mode, title: mode.title)
+                            },
+                            selectedTitle: triggerModeBinding.wrappedValue.title,
+                            width: 220
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -611,11 +611,11 @@ struct HotkeySettingsView: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(SettingsUIStyle.controlFillColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
             )
             .contentShape(Rectangle())
             .onTapGesture(perform: onFocus)

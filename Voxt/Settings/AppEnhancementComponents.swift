@@ -17,11 +17,11 @@ struct SourceTabPicker: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(selectedTab == tab ? Color.accentColor : Color.secondary)
                 .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(selectedTab == tab ? Color.accentColor.opacity(0.14) : .clear)
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .stroke(selectedTab == tab ? Color.accentColor.opacity(0.45) : .clear, lineWidth: 1)
                 }
             }
@@ -29,12 +29,12 @@ struct SourceTabPicker: View {
         .padding(2)
         .frame(width: 154)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(SettingsUIStyle.controlFillColor)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
         }
     }
 }
@@ -87,18 +87,22 @@ struct URLPatternRowView: View {
             Button(AppLocalization.localizedString("Edit")) {
                 onEdit()
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsCompactActionButtonStyle(height: 26, horizontalPadding: 8))
 
             Button(AppLocalization.localizedString("Delete")) {
                 onDelete()
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive, height: 26, horizontalPadding: 8))
         }
         .padding(.horizontal, 10)
         .frame(height: 36)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(SettingsUIStyle.controlFillColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
         )
     }
 }

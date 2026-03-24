@@ -57,8 +57,12 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsUIStyle.windowCornerRadius, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SettingsUIStyle.windowCornerRadius, style: .continuous)
+                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
+                )
 
             Group {
                 switch displayMode {
@@ -72,9 +76,10 @@ struct SettingsView: View {
             .padding(.bottom, 10)
             .padding(.top, 10)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SettingsUIStyle.windowCornerRadius, style: .continuous))
         .frame(minWidth: 760, minHeight: 560)
         .environment(\.locale, interfaceLanguage.locale)
+        .groupBoxStyle(SettingsPanelGroupBoxStyle())
         .id(languageRefreshToken)
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
@@ -176,7 +181,7 @@ struct SettingsView: View {
                         Button("Guide") {
                             enterOnboarding(step: .language)
                         }
-                        .controlSize(.small)
+                        .buttonStyle(SettingsPillButtonStyle())
                     }
                 }
                 .padding(.horizontal, 8)
@@ -413,16 +418,9 @@ private struct SettingsSidebar: View {
                             .font(.system(size: 13, weight: .medium))
                         Spacer(minLength: 0)
                     }
-                    .foregroundStyle(tab == selectedTab ? .white : .primary)
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(tab == selectedTab ? Color.accentColor : Color.clear)
-                    )
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsSidebarItemButtonStyle(isActive: tab == selectedTab))
             }
 
             Spacer(minLength: 8)
@@ -438,18 +436,8 @@ private struct SettingsSidebar: View {
                             .foregroundStyle(.red)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.red.opacity(0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsStatusButtonStyle(tint: .red))
             }
 
             if hasNoAvailableMicrophones {
@@ -463,18 +451,8 @@ private struct SettingsSidebar: View {
                             .foregroundStyle(.red)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.red.opacity(0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsStatusButtonStyle(tint: .red))
             }
 
             if hasMissingModelConfigurationIssues {
@@ -488,18 +466,8 @@ private struct SettingsSidebar: View {
                             .foregroundStyle(.orange)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.orange.opacity(0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsStatusButtonStyle(tint: .orange))
             }
 
             if updateBadgeState != .none {
@@ -513,18 +481,8 @@ private struct SettingsSidebar: View {
                             .foregroundStyle(updateBadgeState.tintColor)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(updateBadgeState.tintColor.opacity(0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(updateBadgeState.tintColor.opacity(0.35), lineWidth: 1)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsStatusButtonStyle(tint: updateBadgeState.tintColor))
             }
 
         }
@@ -532,21 +490,11 @@ private struct SettingsSidebar: View {
         .padding(.bottom, 10)
         .padding(.top, 34)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.72))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 3)
+        .settingsSidebarSurface()
     }
 
     private var visibleTabs: [SettingsTab] {
-        SettingsTab.allCases.filter { tab in
-            appEnhancementEnabled || tab != .appEnhancement
-        }
+        SettingsTab.visibleTabs(appEnhancementEnabled: appEnhancementEnabled)
     }
 }
 

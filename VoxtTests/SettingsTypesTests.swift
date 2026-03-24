@@ -70,4 +70,9 @@ final class SettingsTypesTests: XCTestCase {
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .finish, snapshot: blockedSnapshot), .done)
         XCTAssertEqual(OnboardingStepStatusResolver.resolve(step: .meeting, snapshot: readySnapshot), .ready)
     }
+
+    func testVisibleTabsHideAppEnhancementWhenFeatureDisabled() {
+        XCTAssertFalse(SettingsTab.visibleTabs(appEnhancementEnabled: false).contains(.appEnhancement))
+        XCTAssertTrue(SettingsTab.visibleTabs(appEnhancementEnabled: true).contains(.appEnhancement))
+    }
 }

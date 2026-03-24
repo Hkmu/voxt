@@ -49,7 +49,7 @@ struct AboutSettingsView: View {
                         Button(String(localized: "Check for Updates…")) {
                             appUpdateManager.checkForUpdatesWithUserInterface()
                         }
-                        .controlSize(.small)
+                        .buttonStyle(SettingsPillButtonStyle())
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -114,7 +114,7 @@ struct AboutSettingsView: View {
                         Button("Export Latest Logs (2000)") {
                             exportLatestLogs()
                         }
-                        .controlSize(.small)
+                        .buttonStyle(SettingsPillButtonStyle())
                     }
 
                     let value = latestLogUpdateDate?.formatted(

@@ -31,14 +31,14 @@ extension OnboardingSettingsView {
                     title: "Interface Language",
                     description: "Choose the language used by the main window and menu labels."
                 ) {
-                    Picker("Language", selection: $interfaceLanguageRaw) {
-                        ForEach(AppInterfaceLanguage.allCases, id: \.rawValue) { language in
-                            Text(language.titleKey).tag(language.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 220, alignment: .trailing)
+                    SettingsMenuPicker(
+                        selection: $interfaceLanguageRaw,
+                        options: AppInterfaceLanguage.allCases.map { language in
+                            SettingsMenuOption(value: language.rawValue, title: language.title)
+                        },
+                        selectedTitle: interfaceLanguage.title,
+                        width: 220
+                    )
                 }
 
                 Divider()
@@ -47,17 +47,13 @@ extension OnboardingSettingsView {
                     title: "User Main Language",
                     description: "Used to bias transcription prompts, translation prompts, and text enhancement."
                 ) {
-                    Button(action: { isUserMainLanguageSheetPresented = true }) {
-                        HStack(spacing: 8) {
+                    SettingsSelectionButton(width: 220, action: { isUserMainLanguageSheetPresented = true }) {
+                        HStack(spacing: 0) {
                             Text(userMainLanguageSummary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                         }
                     }
-                    .buttonStyle(.plain)
                 }
 
                 Divider()
@@ -66,14 +62,14 @@ extension OnboardingSettingsView {
                     title: "Translation Language",
                     description: "Used by the dedicated translation shortcut and translation test."
                 ) {
-                    Picker("Target language", selection: $translationTargetLanguageRaw) {
-                        ForEach(TranslationTargetLanguage.allCases, id: \.rawValue) { language in
-                            Text(language.titleKey).tag(language.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 220, alignment: .trailing)
+                    SettingsMenuPicker(
+                        selection: $translationTargetLanguageRaw,
+                        options: TranslationTargetLanguage.allCases.map { language in
+                            SettingsMenuOption(value: language.rawValue, title: language.title)
+                        },
+                        selectedTitle: translationTargetLanguage.title,
+                        width: 220
+                    )
                 }
             }
 
@@ -137,14 +133,14 @@ extension OnboardingSettingsView {
                         openLabel: "Open Folder",
                         onChoose: {},
                         pickerContent: {
-                            Picker("MLX Model", selection: $mlxModelRepo) {
-                                ForEach(MLXModelManager.availableModels) { model in
-                                    Text(model.title).tag(model.id)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .frame(width: 280, alignment: .leading)
+                            SettingsMenuPicker(
+                                selection: $mlxModelRepo,
+                                options: MLXModelManager.availableModels.map { model in
+                                    SettingsMenuOption(value: model.id, title: model.title)
+                                },
+                                selectedTitle: mlxModelManager.displayTitle(for: mlxModelRepo),
+                                width: 280
+                            )
                         },
                         onInstall: {
                             Task { await mlxModelManager.downloadModel(repo: mlxModelRepo) }
@@ -164,14 +160,14 @@ extension OnboardingSettingsView {
                         openLabel: "Open Folder",
                         onChoose: {},
                         pickerContent: {
-                            Picker("Whisper Model", selection: $whisperModelID) {
-                                ForEach(WhisperKitModelManager.availableModels) { model in
-                                    Text(LocalizedStringKey(model.title)).tag(model.id)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .frame(width: 280, alignment: .leading)
+                            SettingsMenuPicker(
+                                selection: $whisperModelID,
+                                options: WhisperKitModelManager.availableModels.map { model in
+                                    SettingsMenuOption(value: model.id, title: AppLocalization.localizedString(model.title))
+                                },
+                                selectedTitle: whisperModelManager.displayTitle(for: whisperModelID),
+                                width: 280
+                            )
                         },
                         onInstall: {
                             Task { await whisperModelManager.downloadModel(id: whisperModelID) }
@@ -189,21 +185,21 @@ extension OnboardingSettingsView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Picker("Local Text Model", selection: Binding(
-                    get: { customLLMRepo },
-                    set: { newValue in
-                        customLLMRepo = newValue
-                        translationCustomLLMRepo = newValue
-                        rewriteCustomLLMRepo = newValue
-                    }
-                )) {
-                    ForEach(CustomLLMModelManager.availableModels) { model in
-                        Text(model.title).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 280, alignment: .leading)
+                SettingsMenuPicker(
+                    selection: Binding(
+                        get: { customLLMRepo },
+                        set: { newValue in
+                            customLLMRepo = newValue
+                            translationCustomLLMRepo = newValue
+                            rewriteCustomLLMRepo = newValue
+                        }
+                    ),
+                    options: CustomLLMModelManager.availableModels.map { model in
+                        SettingsMenuOption(value: model.id, title: model.title)
+                    },
+                    selectedTitle: customLLMManager.displayTitle(for: customLLMRepo),
+                    width: 280
+                )
 
                 Text(customLLMDescription(for: customLLMRepo))
                     .font(.caption)
@@ -234,20 +230,20 @@ extension OnboardingSettingsView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Picker("Remote ASR", selection: Binding(
-                    get: { selectedRemoteASRProvider.rawValue },
-                    set: { newValue in
-                        remoteASRSelectedProviderRaw = newValue
-                        engineRaw = TranscriptionEngine.remote.rawValue
-                    }
-                )) {
-                    ForEach(RemoteASRProvider.allCases) { provider in
-                        Text(provider.title).tag(provider.rawValue)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 280, alignment: .leading)
+                SettingsMenuPicker(
+                    selection: Binding(
+                        get: { selectedRemoteASRProvider.rawValue },
+                        set: { newValue in
+                            remoteASRSelectedProviderRaw = newValue
+                            engineRaw = TranscriptionEngine.remote.rawValue
+                        }
+                    ),
+                    options: RemoteASRProvider.allCases.map { provider in
+                        SettingsMenuOption(value: provider.rawValue, title: provider.title)
+                    },
+                    selectedTitle: selectedRemoteASRProvider.title,
+                    width: 280
+                )
 
                 ProviderStatusRow(
                     title: selectedRemoteASRProvider.title,
@@ -263,25 +259,25 @@ extension OnboardingSettingsView {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Picker("Remote LLM", selection: Binding(
-                    get: { selectedRemoteLLMProvider.rawValue },
-                    set: { newValue in
-                        remoteLLMSelectedProviderRaw = newValue
-                        translationRemoteLLMProviderRaw = newValue
-                        rewriteRemoteLLMProviderRaw = newValue
-                        enhancementModeRaw = EnhancementMode.remoteLLM.rawValue
-                        translationModelProviderRaw = TranslationModelProvider.remoteLLM.rawValue
-                        translationFallbackModelProviderRaw = TranslationModelProvider.remoteLLM.rawValue
-                        rewriteModelProviderRaw = RewriteModelProvider.remoteLLM.rawValue
-                    }
-                )) {
-                    ForEach(RemoteLLMProvider.allCases) { provider in
-                        Text(provider.title).tag(provider.rawValue)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 280, alignment: .leading)
+                SettingsMenuPicker(
+                    selection: Binding(
+                        get: { selectedRemoteLLMProvider.rawValue },
+                        set: { newValue in
+                            remoteLLMSelectedProviderRaw = newValue
+                            translationRemoteLLMProviderRaw = newValue
+                            rewriteRemoteLLMProviderRaw = newValue
+                            enhancementModeRaw = EnhancementMode.remoteLLM.rawValue
+                            translationModelProviderRaw = TranslationModelProvider.remoteLLM.rawValue
+                            translationFallbackModelProviderRaw = TranslationModelProvider.remoteLLM.rawValue
+                            rewriteModelProviderRaw = RewriteModelProvider.remoteLLM.rawValue
+                        }
+                    ),
+                    options: RemoteLLMProvider.allCases.map { provider in
+                        SettingsMenuOption(value: provider.rawValue, title: provider.title)
+                    },
+                    selectedTitle: selectedRemoteLLMProvider.title,
+                    width: 280
+                )
 
                 ProviderStatusRow(
                     title: selectedRemoteLLMProvider.title,
@@ -330,13 +326,13 @@ extension OnboardingSettingsView {
                             .font(.caption)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsInlineSelectorButtonStyle())
                 .help("Open folder")
 
                 Button("Choose") {
                     chooseModelStorageDirectory()
                 }
-                .controlSize(.small)
+                .buttonStyle(SettingsPillButtonStyle())
             }
 
             Text("New model downloads are stored here. Switching the path will not move existing model files.")
@@ -354,28 +350,17 @@ extension OnboardingSettingsView {
     var transcriptionStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             GeneralSettingsCard(title: "Audio") {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center) {
                     Text("Microphone")
                         .foregroundStyle(.secondary)
                     Spacer()
                     if microphoneState.hasAvailableDevices {
-                        Button(action: { isMicrophonePriorityDialogPresented = true }) {
-                            HStack(spacing: 8) {
+                        SettingsSelectionButton(width: 272, action: { isMicrophonePriorityDialogPresented = true }) {
+                            HStack(spacing: 0) {
                                 Text(microphoneState.activeDevice?.name ?? String(localized: "No available microphone devices"))
                                     .lineLimit(1)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
                             }
-                            .padding(.horizontal, 10)
-                            .frame(height: 30)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(Color(nsColor: .controlBackgroundColor))
-                            )
                         }
-                        .buttonStyle(.plain)
-                        .frame(width: 320, alignment: .trailing)
                     } else {
                         Text(String(localized: "No available microphone devices"))
                             .font(.caption.weight(.semibold))
@@ -408,14 +393,14 @@ extension OnboardingSettingsView {
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Trigger", selection: triggerModeSelection) {
-                    ForEach(HotkeyPreference.TriggerMode.allCases) { mode in
-                        Text(mode.titleKey).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 260, alignment: .leading)
+                SettingsMenuPicker(
+                    selection: triggerModeSelection,
+                    options: HotkeyPreference.TriggerMode.allCases.map { mode in
+                        SettingsMenuOption(value: mode, title: mode.title)
+                    },
+                    selectedTitle: triggerModeSelection.wrappedValue.title,
+                    width: 260
+                )
 
                 Text(hotkeyPresetDescription)
                     .font(.caption)
@@ -475,27 +460,18 @@ extension OnboardingSettingsView {
                 )
 
                 TextEditor(text: $translationTestInput)
-                    .font(.system(size: 12))
-                    .frame(height: 110)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.quaternary.opacity(0.35))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(.quaternary, lineWidth: 1)
-                    )
+                    .settingsPromptEditor(height: 110, contentPadding: 6)
 
                 HStack(spacing: 8) {
                     Button("Use Sample") {
                         translationTestInput = OnboardingTranslationTest.defaultInput
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button("Clean") {
                         translationTestInput = ""
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
                 }
             }
         }
@@ -545,35 +521,27 @@ extension OnboardingSettingsView {
                     .font(.subheadline.weight(.medium))
 
                 TextField("Make this shorter and more polite.", text: $rewriteTestPrompt)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface()
 
                 Text("Source Text")
                     .font(.subheadline.weight(.medium))
 
                 TextEditor(text: $rewriteTestSourceText)
-                    .font(.system(size: 12))
-                    .frame(height: 120)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.quaternary.opacity(0.35))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(.quaternary, lineWidth: 1)
-                    )
+                    .settingsPromptEditor(height: 120, contentPadding: 6)
 
                 HStack(spacing: 8) {
                     Button("Use Sample") {
                         rewriteTestPrompt = OnboardingRewriteTest.defaultPrompt
                         rewriteTestSourceText = OnboardingRewriteTest.defaultSourceText
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button("Clean") {
                         rewriteTestPrompt = ""
                         rewriteTestSourceText = ""
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
                 }
             }
         }
@@ -687,17 +655,19 @@ extension OnboardingSettingsView {
                     Button("Export Configuration") {
                         exportConfiguration()
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Button("Import Configuration") {
                         importConfiguration()
                     }
+                    .buttonStyle(SettingsPillButtonStyle())
 
                     Spacer()
 
                     Button("Start Voxt") {
                         onFinish()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(SettingsPrimaryButtonStyle())
                 }
 
                 if let configurationTransferMessage {

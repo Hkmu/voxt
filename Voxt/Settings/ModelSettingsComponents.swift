@@ -8,18 +8,7 @@ struct PromptEditorView: View {
 
     var body: some View {
         TextEditor(text: $text)
-            .font(.system(size: 11, design: .monospaced))
-            .frame(height: height)
-            .scrollContentBackground(.hidden)
-            .padding(contentPadding)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.quaternary.opacity(0.5))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(.quaternary, lineWidth: 1)
-            )
+            .settingsPromptEditor(height: height, contentPadding: contentPadding)
     }
 }
 
@@ -103,11 +92,11 @@ private struct PromptTemplateVariableChip: View {
             .padding(.vertical, 0)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(SettingsUIStyle.controlFillColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
@@ -297,7 +286,11 @@ struct ModelTableView: View {
                             Button(action.title, role: action.role) {
                                 action.handler()
                             }
-                            .controlSize(.small)
+                            .buttonStyle(
+                                SettingsCompactActionButtonStyle(
+                                    tone: action.role == .destructive ? .destructive : .neutral
+                                )
+                            )
                             .disabled(!action.isEnabled)
                         }
                     }
@@ -341,12 +334,12 @@ struct ModelTableView: View {
 private extension View {
     var tableContainerStyle: some View {
         background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(SettingsUIStyle.groupedFillColor)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(SettingsUIStyle.panelBorderColor, lineWidth: 1)
         )
     }
 }

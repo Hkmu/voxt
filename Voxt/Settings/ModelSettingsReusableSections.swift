@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ModelSettingsProviderOption: Identifiable {
     let id: String
-    let titleKey: LocalizedStringKey
+    let title: String
 }
 
 enum ModelSettingsPromptVariables {
@@ -58,7 +58,7 @@ struct ResettablePromptSection: View {
             Button("Reset to Default") {
                 text = defaultText
             }
-            .controlSize(.small)
+            .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
             .disabled(text == defaultText)
         }
 
@@ -91,35 +91,55 @@ struct ModelTaskSettingsCard: View {
                 Text(title)
                     .font(.headline)
 
-                Picker(providerPickerTitle, selection: $selectedProviderID) {
-                    ForEach(providerOptions) { provider in
-                        Text(provider.titleKey).tag(provider.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(maxWidth: 260, alignment: .leading)
-
                 HStack(alignment: .center, spacing: 12) {
-                    Text(modelLabelText)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                    SettingsMenuPicker(
+                        selection: $selectedProviderID,
+                        options: providerOptions.map { provider in
+                            SettingsMenuOption(value: provider.id, title: provider.title)
+                        },
+                        selectedTitle: selectedProviderTitle,
+                        width: 236
+                    )
+
                     if let modelDisplayText {
                         Text(modelDisplayText)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 34)
+                            .background(
+                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
+                                    .fill(SettingsUIStyle.controlFillColor)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
+                                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                            )
                     } else if modelOptions.isEmpty {
                         Text("Not available")
                             .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 34)
+                            .background(
+                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
+                                    .fill(SettingsUIStyle.controlFillColor)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
+                                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                            )
                     } else {
-                        Picker(modelPickerTitle, selection: selectedModelBinding) {
-                            ForEach(modelOptions) { option in
-                                Text(option.title).tag(option.id)
-                            }
-                        }
+                        SettingsMenuPicker(
+                            selection: selectedModelBinding,
+                            options: modelOptions.map { option in
+                                SettingsMenuOption(value: option.id, title: option.title)
+                            },
+                            selectedTitle: selectedModelTitle,
+                            width: 260
+                        )
                         .id("model-picker-\(selectedProviderID)")
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .frame(maxWidth: 280, alignment: .trailing)
                     }
                 }
 
@@ -145,5 +165,17 @@ struct ModelTaskSettingsCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
         }
+    }
+}
+
+private extension ModelTaskSettingsCard {
+    var selectedProviderTitle: String {
+        providerOptions.first(where: { $0.id == selectedProviderID }).map(\.title)
+            ?? selectedProviderID
+    }
+
+    var selectedModelTitle: String {
+        modelOptions.first(where: { $0.id == selectedModelBinding.wrappedValue })?.title
+            ?? selectedModelBinding.wrappedValue
     }
 }

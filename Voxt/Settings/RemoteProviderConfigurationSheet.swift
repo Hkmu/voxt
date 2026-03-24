@@ -26,10 +26,39 @@ struct RemoteProviderConfigurationSheet: View {
     @State private var testResultMessage: String?
     @State private var testResultIsSuccess = false
 
+    private var providerModelMenuOptions: [SettingsMenuOption<String>] {
+        if let llmProvider = llmProviderForPicker {
+            return (
+                llmProvider.latestModelOptions +
+                llmProvider.basicModelOptions +
+                llmProvider.advancedModelOptions
+            ).map { SettingsMenuOption(value: $0.id, title: $0.title) } + [
+                SettingsMenuOption(value: customModelOptionID, title: "Custom...")
+            ]
+        }
+        return providerModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) }
+    }
+
+    private var providerModelSelectedTitle: String {
+        providerModelMenuOptions.first(where: { $0.value == resolvedSelectionForPicker })?.title
+            ?? "Custom..."
+    }
+
+    private var meetingModelMenuOptions: [SettingsMenuOption<String>] {
+        meetingModelOptions.map { SettingsMenuOption(value: $0.id, title: $0.title) } + [
+            SettingsMenuOption(value: customModelOptionID, title: "Custom...")
+        ]
+    }
+
+    private var meetingModelSelectedTitle: String {
+        meetingModelMenuOptions.first(where: { $0.value == resolvedMeetingSelectionForPicker })?.title
+            ?? "Custom..."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(AppLocalization.format("Configure %@", providerTitle))
-                .font(.headline)
+                .font(.title3.weight(.semibold))
 
             modelSection
 
@@ -91,34 +120,20 @@ struct RemoteProviderConfigurationSheet: View {
             Text("Model")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Picker("Model", selection: providerModelSelectionBinding) {
-                if let llmProvider = llmProviderForPicker {
-                    ForEach(llmProvider.latestModelOptions, id: \.self) { option in
-                        Text(option.title).tag(option.id)
-                    }
-                    ForEach(llmProvider.basicModelOptions, id: \.self) { option in
-                        Text(option.title).tag(option.id)
-                    }
-                    ForEach(llmProvider.advancedModelOptions, id: \.self) { option in
-                        Text(option.title).tag(option.id)
-                    }
-                    Text("Custom...").tag(customModelOptionID)
-                } else {
-                    ForEach(providerModelOptions, id: \.self) { option in
-                        Text(option.title).tag(option.id)
-                    }
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
+            SettingsMenuPicker(
+                selection: providerModelSelectionBinding,
+                options: providerModelMenuOptions,
+                selectedTitle: providerModelSelectedTitle,
+                width: 240
+            )
 
             if llmProviderForPicker != nil && resolvedSelectionForPicker == customModelOptionID {
                 Text("Custom Model ID (Optional)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 TextField("e.g. doubao-seed-2-0-pro-260215", text: $customModelID)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
             }
         }
     }
@@ -130,23 +145,30 @@ struct RemoteProviderConfigurationSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 TextField("https://...", text: $endpoint)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
                 if !endpointPresets.isEmpty {
                     HStack(spacing: 10) {
-                        Menu("Apply Preset") {
+                        Menu {
                             ForEach(endpointPresets, id: \.id) { preset in
                                 Button(preset.title) {
                                     endpoint = preset.url
                                 }
                             }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text("Apply Preset")
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
                         }
-                        .controlSize(.small)
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
 
                         if !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Button("Clear") {
                                 endpoint = ""
                             }
-                            .controlSize(.small)
+                            .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 30))
                         }
 
                         Spacer()
@@ -162,7 +184,8 @@ struct RemoteProviderConfigurationSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 SecureField("Paste API key", text: $apiKey)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
             }
         }
     }
@@ -172,22 +195,20 @@ struct RemoteProviderConfigurationSheet: View {
             Text("Meeting ASR")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Picker("Meeting ASR", selection: meetingModelSelectionBinding) {
-                ForEach(meetingModelOptions, id: \.self) { option in
-                    Text(option.title).tag(option.id)
-                }
-                Text("Custom...").tag(customModelOptionID)
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
+            SettingsMenuPicker(
+                selection: meetingModelSelectionBinding,
+                options: meetingModelMenuOptions,
+                selectedTitle: meetingModelSelectedTitle,
+                width: 240
+            )
 
             if resolvedMeetingSelectionForPicker == customModelOptionID {
                 Text("Custom Meeting Model ID")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 TextField("e.g. qwen3-asr-flash-filetrans", text: $customMeetingModelID)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
             }
 
             Text("Used only for Meeting Notes transcription.")
@@ -203,7 +224,8 @@ struct RemoteProviderConfigurationSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 TextField("App ID", text: $appID)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -211,7 +233,8 @@ struct RemoteProviderConfigurationSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 SecureField("Paste access token", text: $accessToken)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
             }
         }
     }
@@ -227,7 +250,7 @@ struct RemoteProviderConfigurationSheet: View {
     }
 
     private var actionSection: some View {
-        HStack {
+        SettingsDialogActionRow {
             if isTestingConnection {
                 ProgressView()
                     .controlSize(.small)
@@ -235,24 +258,29 @@ struct RemoteProviderConfigurationSheet: View {
             Button("Test") {
                 testConnection()
             }
+            .buttonStyle(SettingsPillButtonStyle())
             .disabled(isTestingConnection)
 
             if showsMeetingASRSection {
                 Button("Test Meeting ASR") {
                     testMeetingConnection()
                 }
+                .buttonStyle(SettingsPillButtonStyle())
                 .disabled(isTestingConnection)
             }
-
-            Spacer()
+        } trailing: {
             Button("Cancel") {
                 dismiss()
             }
+            .buttonStyle(SettingsPillButtonStyle())
+            .keyboardShortcut(.cancelAction)
+
             Button("Save") {
                 onSave(currentConfigurationSnapshot)
                 dismiss()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(SettingsPrimaryButtonStyle())
+            .keyboardShortcut(.defaultAction)
         }
     }
 

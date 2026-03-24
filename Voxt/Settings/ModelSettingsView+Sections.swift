@@ -52,14 +52,14 @@ extension ModelSettingsView {
                 .font(.subheadline.weight(.medium))
 
             HStack(alignment: .center, spacing: 12) {
-                Picker("Model", selection: $modelRepo) {
-                    ForEach(MLXModelManager.availableModels) { model in
-                        Text(model.title).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(maxWidth: 260, alignment: .leading)
+                SettingsMenuPicker(
+                    selection: $modelRepo,
+                    options: MLXModelManager.availableModels.map { model in
+                        SettingsMenuOption(value: model.id, title: model.title)
+                    },
+                    selectedTitle: mlxModelManager.displayTitle(for: modelRepo),
+                    width: 260
+                )
 
                 Spacer()
 
@@ -125,21 +125,21 @@ extension ModelSettingsView {
                 .font(.subheadline.weight(.medium))
 
             HStack(alignment: .center, spacing: 12) {
-                Picker("Model", selection: whisperModelSelectionBinding) {
-                    ForEach(WhisperKitModelManager.availableModels) { model in
-                        Text(LocalizedStringKey(model.title)).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(maxWidth: 260, alignment: .leading)
+                SettingsMenuPicker(
+                    selection: whisperModelSelectionBinding,
+                    options: WhisperKitModelManager.availableModels.map { model in
+                        SettingsMenuOption(value: model.id, title: AppLocalization.localizedString(model.title))
+                    },
+                    selectedTitle: whisperModelManager.displayTitle(for: whisperModelID),
+                    width: 260
+                )
 
                 Spacer()
 
                 Button("Configure") {
                     isWhisperConfigPresented = true
                 }
-                .controlSize(.regular)
+                .buttonStyle(SettingsPillButtonStyle())
 
                 HStack(spacing: 6) {
                     Toggle("Use China mirror", isOn: $useHfMirror)
@@ -241,11 +241,11 @@ extension ModelSettingsView {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button("Done") {
                     isWhisperConfigPresented = false
                 }
+                .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }

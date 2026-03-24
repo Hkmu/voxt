@@ -18,26 +18,14 @@ struct GroupEditorSheet: View {
                 Text(AppLocalization.localizedString("Group Name"))
                     .font(.headline)
                 TextField(AppLocalization.localizedString("Enter group name"), text: $name)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .settingsFieldSurface(minHeight: 34)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(AppLocalization.localizedString("Prompt"))
                     .font(.headline)
-                TextEditor(text: $prompt)
-                    .font(.system(size: 13))
-                    .lineSpacing(4)
-                    .padding(8)
-                    .frame(minHeight: 160, alignment: .topLeading)
-                    .scrollContentBackground(.hidden)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                    )
+                PromptEditorView(text: $prompt, height: 160, contentPadding: 8)
                 PromptTemplateVariablesView(
                     variables: [
                         PromptTemplateVariableDescriptor(
@@ -60,10 +48,13 @@ struct GroupEditorSheet: View {
 
             Spacer(minLength: 6)
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button(AppLocalization.localizedString("Cancel"), action: onCancel)
+                    .buttonStyle(SettingsPillButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+
                 Button(actionTitle, action: onSave)
+                    .buttonStyle(SettingsPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -88,20 +79,7 @@ struct URLBatchEditorSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(AppLocalization.localizedString("URL Patterns"))
                     .font(.headline)
-                TextEditor(text: $text)
-                    .font(.system(size: 13))
-                    .lineSpacing(4)
-                    .padding(8)
-                    .frame(minHeight: 180, alignment: .topLeading)
-                    .scrollContentBackground(.hidden)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                    )
+                PromptEditorView(text: $text, height: 180, contentPadding: 8)
 
                 Text(AppLocalization.localizedString("Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc"))
                     .font(.caption)
@@ -116,10 +94,13 @@ struct URLBatchEditorSheet: View {
 
             Spacer(minLength: 6)
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button(AppLocalization.localizedString("Cancel"), action: onCancel)
+                    .buttonStyle(SettingsPillButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+
                 Button(actionTitle, action: onSave)
+                    .buttonStyle(SettingsPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -143,17 +124,17 @@ struct URLDetailSheet: View {
                 .padding(10)
                 .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
+                    RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                        .fill(SettingsUIStyle.controlFillColor)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                        .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
                 )
 
-            HStack {
-                Spacer()
+            SettingsDialogActionRow {
                 Button(AppLocalization.localizedString("Close"), action: onClose)
+                    .buttonStyle(SettingsPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }

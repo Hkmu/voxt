@@ -101,23 +101,24 @@ struct ASRHintSettingsSheet: View {
                 )
             }
 
-            HStack {
+            SettingsDialogActionRow {
                 Button("Reset to Default") {
                     draftSettings = ASRHintSettingsStore.defaultSettings(for: target)
                 }
-                .controlSize(.small)
+                .buttonStyle(SettingsPillButtonStyle())
                 .disabled(draftSettings == initialSettings && initialSettings == ASRHintSettingsStore.defaultSettings(for: target))
-
-                Spacer()
-
+            } trailing: {
                 Button("Cancel") {
                     dismiss()
                 }
+                .buttonStyle(SettingsPillButtonStyle())
+                .keyboardShortcut(.cancelAction)
 
                 Button("Save") {
                     onSave(ASRHintSettingsStore.sanitized(draftSettings, for: target))
                     dismiss()
                 }
+                .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }
