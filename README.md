@@ -77,7 +77,7 @@ Voxt separates ASR provider models and LLM provider models. They are used for sp
 
 ### Local Models
 
-With newer macOS versions and local model support, Voxt currently ships with:
+With macOS 15.0 or later and local model support, Voxt currently ships with:
 
 - `MLX Audio` local ASR models
 - `Whisper` via WhisperKit, as a separate local ASR engine
@@ -638,6 +638,6 @@ Apache 2.0. See [LICENSE](LICENSE).
 [license-link]: ./LICENSE
 [release-date-link]: https://github.com/hehehai/voxt/releases/latest
 [github-release-shield]: https://img.shields.io/github/v/release/hehehai/voxt?label=release&labelColor=000000&color=3fb950&style=flat-square&logo=github&logoColor=white
-[macos-version-shield]: https://img.shields.io/badge/macOS-26.0%2B-58a6ff?style=flat-square&labelColor=000000&logo=apple&logoColor=white
+[macos-version-shield]: https://img.shields.io/badge/macOS-15.0%2B-58a6ff?style=flat-square&labelColor=000000&logo=apple&logoColor=white
 [license-shield]: https://img.shields.io/badge/License-Apache%202.0-58a6ff.svg?style=flat-square&labelColor=000000&logo=apache&logoColor=white
 [release-date-shield]: https://img.shields.io/github/release-date/hehehai/voxt?style=flat-square&labelColor=000000&color=58a6ff&logo=github&logoColor=white
