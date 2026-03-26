@@ -884,9 +884,13 @@
 				revision = e33eba8513595bde535719c48fedcb10ade5af57;
 			};
 		};
-		D1E2F3A4B5C60718293A4B5E /* XCLocalSwiftPackageReference "Vendor/WhisperKitCompat" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Vendor/WhisperKitCompat;
+		D1E2F3A4B5C60718293A4B5E /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.17.0;
+			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
@@ -913,7 +917,7 @@
 		};
 		D1E2F3A4B5C60718293A4B5D /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D1E2F3A4B5C60718293A4B5E /* XCLocalSwiftPackageReference "Vendor/WhisperKitCompat" */;
+			package = D1E2F3A4B5C60718293A4B5E /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
 		};
 /* End XCSwiftPackageProductDependency section */
