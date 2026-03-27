@@ -237,7 +237,7 @@ extension AppDelegate {
         guard shouldHandleCallbacks(for: sessionID) else { return }
         let selectedSourceText = selectedTextFromSystemSelection()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         rewriteSessionHasSelectedSourceText = !selectedSourceText.isEmpty
-        let prefersStructuredAnswerOutput = shouldPresentRewriteAnswerOverlay(
+        let prefersStructuredAnswerOutput = shouldUseStructuredRewriteAnswerOutput(
             hasSelectedSourceText: rewriteSessionHasSelectedSourceText
         )
         VoxtLog.info(

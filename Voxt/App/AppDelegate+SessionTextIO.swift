@@ -310,7 +310,11 @@ extension AppDelegate {
             : .typeText
     }
 
-    func shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: Bool) -> Bool {
+    func shouldPresentRewriteAnswerOverlay(hasSelectedSourceText _: Bool) -> Bool {
+        return sessionOutputMode == .rewrite
+    }
+
+    func shouldUseStructuredRewriteAnswerOutput(hasSelectedSourceText: Bool) -> Bool {
         sessionOutputMode == .rewrite && !hasSelectedSourceText
     }
 
