@@ -105,5 +105,72 @@ final class EnhancementPromptResolverTests: XCTestCase {
         XCTAssertEqual(output.promptContext.matchedAppGroupName, "Xcode")
         XCTAssertContains(output.content, "Xcode rewrite")
     }
-}
 
+    func testAppGroupWithEmptyPromptSkipsEnhancementButKeepsMatchedContext() {
+        let group = TestFactories.makeAppBranchGroup(
+            name: "Xcode",
+            prompt: "   ",
+            appBundleIDs: ["com.apple.dt.Xcode"]
+        )
+
+        let output = EnhancementPromptResolver.resolve(
+            .init(
+                globalPrompt: "Global {{RAW_TRANSCRIPTION}}",
+                rawTranscription: "rewrite",
+                userMainLanguagePromptValue: "English",
+                dictionaryGlossary: "- OpenAI",
+                appEnhancementEnabled: true,
+                groups: [group],
+                urlsByID: [:],
+                frontmostBundleID: "com.apple.dt.Xcode",
+                focusedAppName: "Xcode",
+                normalizedActiveURL: nil,
+                supportedBrowserBundleIDs: []
+            )
+        )
+
+        XCTAssertEqual(output.delivery, .skipEnhancement)
+        XCTAssertEqual(output.promptContext.matchedGroupID, group.id)
+        XCTAssertEqual(output.promptContext.matchedAppGroupName, "Xcode")
+        XCTAssertEqual(output.source, .appGroupPromptDisabled(groupName: "Xcode", bundleID: "com.apple.dt.Xcode"))
+        XCTAssertEqual(output.content, "")
+    }
+
+    func testBrowserURLMatchWithEmptyPromptSkipsEnhancementButKeepsMatchedContext() {
+        let docsID = UUID()
+        let docsGroup = TestFactories.makeAppBranchGroup(
+            name: "Docs",
+            prompt: "",
+            urlPatternIDs: [docsID]
+        )
+
+        let output = EnhancementPromptResolver.resolve(
+            .init(
+                globalPrompt: "Global {{RAW_TRANSCRIPTION}}",
+                rawTranscription: "fix this",
+                userMainLanguagePromptValue: "English",
+                dictionaryGlossary: "- OpenAI",
+                appEnhancementEnabled: true,
+                groups: [docsGroup],
+                urlsByID: [docsID: "example.com/docs/*"],
+                frontmostBundleID: "com.google.Chrome",
+                focusedAppName: "Google Chrome",
+                normalizedActiveURL: "example.com/docs/page",
+                supportedBrowserBundleIDs: ["com.google.Chrome"]
+            )
+        )
+
+        XCTAssertEqual(output.delivery, .skipEnhancement)
+        XCTAssertEqual(output.promptContext.matchedGroupID, docsGroup.id)
+        XCTAssertEqual(output.promptContext.matchedURLGroupName, "Docs")
+        XCTAssertEqual(
+            output.source,
+            .urlGroupPromptDisabled(
+                groupName: "Docs",
+                pattern: "example.com/docs/*",
+                url: "example.com/docs/page"
+            )
+        )
+        XCTAssertEqual(output.content, "")
+    }
+}

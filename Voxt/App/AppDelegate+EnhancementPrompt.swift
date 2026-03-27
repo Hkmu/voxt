@@ -10,6 +10,7 @@ extension AppDelegate {
         enum Delivery {
             case systemPrompt
             case userMessage
+            case skipEnhancement
         }
 
         let content: String
@@ -82,13 +83,26 @@ extension AppDelegate {
             VoxtLog.info("Enhancement prompt source: global/default (no group match), bundleID=\(bundleID ?? "nil")")
         case .appGroup(let groupName, let bundleID):
             VoxtLog.info("Enhancement prompt source: group(app) group=\(groupName), bundleID=\(bundleID)")
+        case .appGroupPromptDisabled(let groupName, let bundleID):
+            VoxtLog.info("Enhancement prompt skipped: matched app group has empty prompt. group=\(groupName), bundleID=\(bundleID)")
         case .urlGroup(let groupName, let pattern, let url):
             VoxtLog.info("Enhancement prompt source: group(url) group=\(groupName), pattern=\(pattern), url=\(url)")
+        case .urlGroupPromptDisabled(let groupName, let pattern, let url):
+            VoxtLog.info("Enhancement prompt skipped: matched url group has empty prompt. group=\(groupName), pattern=\(pattern), url=\(url)")
         }
 
         return EnhancementPromptResolution(
             content: resolution.content,
-            delivery: resolution.delivery == EnhancementPromptResolver.Delivery.systemPrompt ? .systemPrompt : .userMessage
+            delivery: {
+                switch resolution.delivery {
+                case .systemPrompt:
+                    return .systemPrompt
+                case .userMessage:
+                    return .userMessage
+                case .skipEnhancement:
+                    return .skipEnhancement
+                }
+            }()
         )
     }
 

@@ -91,6 +91,9 @@ extension AppDelegate {
 
     func enhanceTextForCurrentMode(_ text: String) async throws -> String {
         let promptResolution = resolvedEnhancementPrompt(rawTranscription: text)
+        if promptResolution.delivery == .skipEnhancement {
+            return text
+        }
 
         switch enhancementMode {
         case .off:
@@ -103,6 +106,8 @@ extension AppDelegate {
                     return try await enhancer.enhance(text, systemPrompt: promptResolution.content)
                 case .userMessage:
                     return try await enhancer.enhance(userPrompt: promptResolution.content)
+                case .skipEnhancement:
+                    return text
                 }
             }
             return text
@@ -112,6 +117,8 @@ extension AppDelegate {
                 return try await customLLMManager.enhance(text, systemPrompt: promptResolution.content)
             case .userMessage:
                 return try await customLLMManager.enhance(userPrompt: promptResolution.content)
+            case .skipEnhancement:
+                return text
             }
         case .remoteLLM:
             let context = resolvedRemoteLLMContext(forTranslation: false)
@@ -128,6 +135,8 @@ extension AppDelegate {
                 )
             case .userMessage:
                 return try await RemoteLLMRuntimeClient().enhance(userPrompt: promptResolution.content, provider: context.provider, configuration: context.configuration)
+            case .skipEnhancement:
+                return text
             }
         }
     }

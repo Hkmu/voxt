@@ -4,6 +4,7 @@ struct EnhancementPromptResolver {
     enum Delivery: Equatable {
         case systemPrompt
         case userMessage
+        case skipEnhancement
     }
 
     enum GlobalFallbackReason: Equatable {
@@ -17,7 +18,9 @@ struct EnhancementPromptResolver {
     enum Source: Equatable {
         case globalDefault(GlobalFallbackReason)
         case appGroup(groupName: String, bundleID: String)
+        case appGroupPromptDisabled(groupName: String, bundleID: String)
         case urlGroup(groupName: String, pattern: String, url: String)
+        case urlGroupPromptDisabled(groupName: String, pattern: String, url: String)
     }
 
     struct PromptContext: Equatable {
@@ -110,6 +113,28 @@ struct EnhancementPromptResolver {
                 )
             }
 
+            if let match = AppBranchURLPatternService.firstGroupMatch(
+                groups: input.groups,
+                urlsByID: input.urlsByID,
+                normalizedURL: normalizedActiveURL
+            ) {
+                return Output(
+                    content: "",
+                    delivery: .skipEnhancement,
+                    promptContext: PromptContext(
+                        focusedAppName: input.focusedAppName,
+                        matchedGroupID: match.groupID,
+                        matchedAppGroupName: nil,
+                        matchedURLGroupName: match.groupName
+                    ),
+                    source: .urlGroupPromptDisabled(
+                        groupName: match.groupName,
+                        pattern: match.pattern,
+                        url: normalizedActiveURL
+                    )
+                )
+            }
+
             return makeFallback(reason: .browserURLNoMatch(bundleID: bundleID, url: normalizedActiveURL))
         }
 
@@ -134,6 +159,18 @@ struct EnhancementPromptResolver {
                     source: .appGroup(groupName: group.name, bundleID: bundleID)
                 )
             }
+
+            return Output(
+                content: "",
+                delivery: .skipEnhancement,
+                promptContext: PromptContext(
+                    focusedAppName: input.focusedAppName,
+                    matchedGroupID: group.id,
+                    matchedAppGroupName: group.name,
+                    matchedURLGroupName: nil
+                ),
+                source: .appGroupPromptDisabled(groupName: group.name, bundleID: bundleID)
+            )
         }
 
         return makeFallback(reason: .noGroupMatch(bundleID: input.frontmostBundleID))
