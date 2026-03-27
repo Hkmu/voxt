@@ -4,30 +4,60 @@ import XCTest
 @MainActor
 final class SessionTextIOTests: XCTestCase {
     func testRewriteAlwaysPresentsAnswerOverlay() {
-        let delegate = AppDelegate()
-        delegate.sessionOutputMode = .rewrite
-
-        XCTAssertTrue(delegate.shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: false))
-        XCTAssertTrue(delegate.shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: true))
+        XCTAssertTrue(
+            AppDelegate.shouldPresentRewriteAnswerOverlay(
+                sessionOutputMode: .rewrite,
+                hasSelectedSourceText: false
+            )
+        )
+        XCTAssertTrue(
+            AppDelegate.shouldPresentRewriteAnswerOverlay(
+                sessionOutputMode: .rewrite,
+                hasSelectedSourceText: true
+            )
+        )
     }
 
     func testOnlyDirectAnswerRewriteUsesStructuredOutput() {
-        let delegate = AppDelegate()
-        delegate.sessionOutputMode = .rewrite
-
-        XCTAssertTrue(delegate.shouldUseStructuredRewriteAnswerOutput(hasSelectedSourceText: false))
-        XCTAssertFalse(delegate.shouldUseStructuredRewriteAnswerOutput(hasSelectedSourceText: true))
+        XCTAssertTrue(
+            AppDelegate.shouldUseStructuredRewriteAnswerOutput(
+                sessionOutputMode: .rewrite,
+                hasSelectedSourceText: false
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldUseStructuredRewriteAnswerOutput(
+                sessionOutputMode: .rewrite,
+                hasSelectedSourceText: true
+            )
+        )
     }
 
     func testNonRewriteSessionsDoNotPresentRewriteAnswerOverlay() {
-        let delegate = AppDelegate()
+        XCTAssertFalse(
+            AppDelegate.shouldPresentRewriteAnswerOverlay(
+                sessionOutputMode: .transcription,
+                hasSelectedSourceText: false
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldUseStructuredRewriteAnswerOutput(
+                sessionOutputMode: .transcription,
+                hasSelectedSourceText: false
+            )
+        )
 
-        delegate.sessionOutputMode = .transcription
-        XCTAssertFalse(delegate.shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: false))
-        XCTAssertFalse(delegate.shouldUseStructuredRewriteAnswerOutput(hasSelectedSourceText: false))
-
-        delegate.sessionOutputMode = .translation
-        XCTAssertFalse(delegate.shouldPresentRewriteAnswerOverlay(hasSelectedSourceText: false))
-        XCTAssertFalse(delegate.shouldUseStructuredRewriteAnswerOutput(hasSelectedSourceText: false))
+        XCTAssertFalse(
+            AppDelegate.shouldPresentRewriteAnswerOverlay(
+                sessionOutputMode: .translation,
+                hasSelectedSourceText: false
+            )
+        )
+        XCTAssertFalse(
+            AppDelegate.shouldUseStructuredRewriteAnswerOutput(
+                sessionOutputMode: .translation,
+                hasSelectedSourceText: false
+            )
+        )
     }
 }
